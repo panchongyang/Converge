@@ -1,0 +1,288 @@
+/**
+ * “全部树”目录：纸面底色、细线与字的层次，不用卡片、投影或胶囊。
+ * 头部固定，列表在自己的滚动区里；窄面板时收边距，仍保留根问题主标题与树 ID 的上下层次。
+ */
+.ct-dir {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--ct-ground);
+  color: var(--ct-ink-1);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-row);
+  line-height: var(--ct-lh-body);
+}
+
+.ct-dir__head {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: var(--ct-s4);
+  padding: var(--ct-s6) var(--ct-s6) var(--ct-s4);
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+}
+
+.ct-dir__heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.ct-dir__title {
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-title);
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+.ct-dir__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: var(--ct-s1);
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+}
+
+.ct-dir__dot {
+  color: var(--ct-ink-4);
+}
+
+.ct-dir__session {
+  font-size: var(--ct-fs-id);
+  color: var(--ct-ink-2);
+}
+
+.ct-dir__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--ct-s4);
+  padding-bottom: 2px;
+}
+
+.ct-dir__refresh {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-dir__scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.ct-dir__body {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: var(--ct-s5) var(--ct-s6) var(--ct-s8);
+}
+
+/* —— 新建树表单 —— */
+.ct-dir__form {
+  margin-bottom: var(--ct-s5);
+  padding: var(--ct-s4) var(--ct-s5) var(--ct-s5);
+  border: var(--ct-hair) solid var(--ct-line-strong);
+  background: var(--ct-page);
+}
+
+.ct-dir__formhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ct-s3);
+  margin-bottom: var(--ct-s3);
+}
+
+.ct-dir__formtitle {
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-lead);
+}
+
+.ct-dir__formclose {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-dir__form .ct-field + .ct-field {
+  margin-top: var(--ct-s3);
+}
+
+.ct-dir__formfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ct-s3);
+  margin-top: var(--ct-s4);
+}
+
+.ct-dir__formhint {
+  flex: 1;
+  min-width: 180px;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+}
+
+/* —— 列表 —— */
+.ct-dir__list {
+  border-top: var(--ct-hair) solid var(--ct-line);
+}
+
+.ct-dir__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--ct-s3);
+  width: 100%;
+  padding: var(--ct-s3) var(--ct-s2);
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+  color: var(--ct-ink-1);
+  text-align: left;
+  transition: background-color var(--ct-dur-hover) var(--ct-ease-out);
+}
+
+button.ct-dir__row:hover {
+  background: var(--ct-sel);
+}
+
+button.ct-dir__row:disabled {
+  cursor: default;
+}
+
+.ct-dir__q {
+  min-width: 0;
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-body);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ct-dir__rowmeta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--ct-s2);
+  white-space: nowrap;
+}
+
+.ct-dir__id {
+  max-width: 24ch;
+  overflow: hidden;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-id);
+  text-overflow: ellipsis;
+}
+
+.ct-dir__row--unavailable {
+  color: var(--ct-ink-3);
+}
+
+.ct-dir__row--unavailable .ct-dir__q {
+  font-style: italic;
+  color: var(--ct-ink-3);
+}
+
+.ct-dir__unavailable {
+  color: var(--ct-warn);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-dir__partial {
+  margin-top: var(--ct-s3);
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+}
+
+.ct-dir__partialid {
+  margin-left: 6px;
+  color: var(--ct-ink-2);
+}
+
+/* —— 空、失败与刷新失败 —— */
+.ct-dir__state {
+  padding: var(--ct-s7) 0;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-row);
+}
+
+.ct-dir__state--empty,
+.ct-dir__state--error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ct-s2);
+  padding: var(--ct-s8) var(--ct-s2);
+}
+
+.ct-dir__statetitle {
+  color: var(--ct-ink-1);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-lead);
+}
+
+.ct-dir__statedesc {
+  max-width: 52ch;
+  color: var(--ct-ink-2);
+  line-height: var(--ct-lh-body);
+}
+
+.ct-dir__state--empty .ct-btn,
+.ct-dir__state--error .ct-btn {
+  margin-top: var(--ct-s2);
+}
+
+.ct-dir__banner {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ct-s3);
+  margin-bottom: var(--ct-s3);
+  padding: var(--ct-s2) var(--ct-s3);
+  border-left: 2px solid var(--ct-warn);
+  background: color-mix(in srgb, var(--ct-warn) 7%, transparent);
+  color: var(--ct-ink-2);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+}
+
+.ct-dir__banner .ct-textbtn {
+  flex: none;
+  color: var(--ct-link);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-dir__error {
+  margin-bottom: var(--ct-s3);
+  padding: var(--ct-s2) 0 var(--ct-s2) var(--ct-s3);
+  border-left: 2px solid var(--ct-danger);
+  color: var(--ct-danger);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+  white-space: pre-wrap;
+}
+
+@media (max-width: 720px) {
+  .ct-dir__head {
+    padding: var(--ct-s4) var(--ct-s4) var(--ct-s3);
+  }
+
+  .ct-dir__title {
+    font-size: var(--ct-fs-lead);
+  }
+
+  .ct-dir__body {
+    padding: var(--ct-s4) var(--ct-s4) var(--ct-s7);
+  }
+
+  .ct-dir__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .ct-dir__rowmeta {
+    justify-self: start;
+  }
+}

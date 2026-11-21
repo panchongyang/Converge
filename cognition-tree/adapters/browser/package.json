@@ -1,0 +1,28 @@
+{
+  "name": "@cognition-tree/browser",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "认知树独立浏览器入口：网页壳、正式内核装配、localStorage 测试存储、本地 client、AI 模拟器与开发坞",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.kernel.json && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.kernel.json"
+  },
+  "dependencies": {
+    "@cognition-tree/kernel": "workspace:*",
+    "@cognition-tree/ui": "workspace:*",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "6.3.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
+  }
+}

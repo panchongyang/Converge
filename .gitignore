@@ -1,0 +1,4 @@
+# 不提交本机工作文件、安装依赖或用户工作区的正式认知数据。
+.local-work/
+node_modules/
+.converge/

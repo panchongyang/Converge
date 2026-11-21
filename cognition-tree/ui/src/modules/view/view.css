@@ -1,0 +1,115 @@
+/**
+ * 状态行与视野参数句：常显一行淡字，参数句在状态行上方原地展开。
+ * 只有细线、下划线与留白；没有浮层、投影和底色块。
+ */
+.ct-status {
+  position: absolute;
+  left: var(--ct-s5);
+  right: var(--ct-s5);
+  bottom: var(--ct-s3);
+  z-index: var(--ct-z-status);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-s2);
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  pointer-events: none;
+}
+.ct-status > * {
+  pointer-events: auto;
+}
+
+.ct-status__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ct-s4);
+}
+.ct-status__left {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+.ct-status__dot {
+  color: var(--ct-ink-4);
+}
+.ct-status__fit {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-id);
+}
+.ct-status__fit:hover {
+  color: var(--ct-ink-2);
+}
+
+.ct-viewline,
+.ct-modeline,
+.ct-status__error {
+  max-width: 100%;
+  padding: var(--ct-s2) 0;
+  border-top: var(--ct-hair) solid var(--ct-line);
+  background: var(--ct-ground);
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+  line-height: 1.85;
+}
+
+.ct-viewline {
+  max-width: 860px;
+}
+
+.ct-inlineval {
+  display: inline;
+  white-space: nowrap;
+}
+.ct-inlineval__select {
+  appearance: none;
+  display: inline;
+  width: auto;
+  padding: 0 1px;
+  border: 0;
+  border-bottom: var(--ct-hair) solid var(--ct-link);
+  border-radius: 0;
+  background: none;
+  color: var(--ct-link);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  line-height: inherit;
+  cursor: pointer;
+}
+.ct-inlineval__select:focus {
+  outline: none;
+  border-bottom-style: solid;
+  border-bottom-color: var(--ct-ink-1);
+}
+
+.ct-modeline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--ct-s4);
+  align-self: flex-start;
+}
+.ct-modeline .ct-textbtn.is-on {
+  color: var(--ct-ink-1);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ct-status__hint {
+  color: var(--ct-ink-4);
+  font-size: var(--ct-fs-id);
+}
+
+.ct-status__error {
+  color: var(--ct-danger);
+  font-size: var(--ct-fs-ui);
+}
+.ct-status__error .ct-link,
+.ct-status__error .ct-textbtn {
+  margin-left: 8px;
+  color: var(--ct-danger);
+  font-size: var(--ct-fs-ui);
+}
+.ct-status__dismiss {
+  color: var(--ct-ink-3);
+}

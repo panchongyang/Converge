@@ -1,0 +1,319 @@
+/**
+ * 认知树 UI 的设计令牌（唯一维护颜色、字体、字号、间距、线宽与动效时长的地方）。
+ *
+ * 两套外观结构相同，只换值：
+ * - 纸本（paper）：燕麦色的底、象牙白的阅读栏、深褐墨色的字；
+ * - 夜读（ink）：乌木墨色的底、略亮一层的阅读栏、暖象牙色的字。
+ * 缺省跟随系统深浅色；元素上（html 或 UI 根）的 data-ct-theme="paper" | "ink" 优先于系统设置，
+ * 因此显式外观的规则必须写在 prefers-color-scheme 之后。
+ * 组件样式与 SVG 只引用这里的变量或 currentColor，不写裸色值。
+ * “减少动态效果”时全部长时归零，静态外观保持不变。
+ *
+ * 字号随窗口宽度连续变化：每个字号令牌是一个 clamp(最小, 随 vw 增长, 最大)，
+ * 1440px 附近取接近最小的一档，屏幕越宽字越大，不按具体屏幕型号跳档。
+ * 左栏与阅读栏的宽度又由字号算出，行宽（约 29 个正文汉字、约 20 个列表字）保持稳定；
+ * 窗口很窄时再用 28vw / 40vw 封顶，保证空间仍占得住。
+ * 正文与说明文字的颜色在纸本和夜读里都满足正文对比度 ≥ 4.5:1（占位文字 ≥ 3:1）。
+ */
+
+/* —— 纸本：默认值（浅色系统）—— */
+:root {
+  color-scheme: light;
+
+  --ct-ground: #f3eee4;
+  --ct-page: #faf7f1;
+  --ct-sel: #eae3d3;
+
+  --ct-ink-1: #2b2824;
+  --ct-ink-2: #4a433b;
+  --ct-ink-3: #6b6152;
+  --ct-ink-4: #8f8471;
+
+  --ct-line: #ddd3c1;
+  --ct-line-strong: #c9bba0;
+  --ct-edge: #c4b8a2;
+  --ct-edge-faint: #ded5c4;
+  --ct-edge-focus: #3a342d;
+
+  --ct-keep: #2b2824;
+  --ct-open: #a87732;
+  --ct-prune: #9c9282;
+  --ct-unknown: #a89d8a;
+
+  --ct-ai: #6f6a5f;
+  --ct-seal: #b03a27;
+  --ct-seal-fg: #fbf5e9;
+
+  --ct-premise: #8c6a3c;
+  --ct-example: #7a8471;
+  --ct-conflict: #9b4d3b;
+
+  --ct-link: #33506b;
+  --ct-warn: #a87732;
+  --ct-danger: #9b4d3b;
+
+  --ct-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  --ct-sans: "Noto Sans SC", "Microsoft YaHei UI", system-ui, sans-serif;
+  --ct-mono: "Cascadia Code", Consolas, monospace;
+
+  --ct-fs-micro: clamp(11px, 0.2vw + 8.2px, 14px);
+  --ct-fs-id: clamp(12px, 0.24vw + 8.6px, 15px);
+  --ct-fs-ui: clamp(13px, 0.27vw + 9.2px, 16.5px);
+  --ct-fs-row: clamp(14px, 0.31vw + 9.6px, 17.5px);
+  --ct-fs-body: clamp(16px, 0.4vw + 10.2px, 20px);
+  --ct-fs-lead: clamp(18px, 0.42vw + 11.9px, 22px);
+  --ct-fs-label: clamp(14px, 0.34vw + 9.1px, 17px);
+  --ct-fs-root: calc(var(--ct-fs-label) * 1.4);
+  --ct-fs-title: clamp(28px, 0.55vw + 20px, 34px);
+  --ct-lh-body: 1.85;
+  --ct-lh-ui: 1.5;
+
+  --ct-s1: 4px;
+  --ct-s2: 8px;
+  --ct-s3: 12px;
+  --ct-s4: 16px;
+  --ct-s5: 20px;
+  --ct-s6: 24px;
+  --ct-s7: 28px;
+  --ct-s8: 32px;
+  --ct-s9: 40px;
+  --ct-s10: 48px;
+
+  --ct-r: 2px;
+  --ct-r-max: 3px;
+  --ct-hair: 1px;
+  --ct-edge-w: 1px;
+  --ct-focus-w: 1.25px;
+
+  --ct-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ct-ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+
+  --ct-dur-hover: 120ms;
+  --ct-dur-out: 160ms;
+  --ct-dur-in: 200ms;
+  --ct-dur-open: 220ms;
+  --ct-dur-focus: 240ms;
+  --ct-dur-mark: 300ms;
+  --ct-dur-state: 400ms;
+  --ct-dur-layout: 420ms;
+  --ct-dur-enter: 800ms;
+
+  --ct-bar-h: clamp(52px, calc(3.2 * var(--ct-fs-row) + 8px), 66px);
+  --ct-rail-w: min(calc(20 * var(--ct-fs-row)), 28vw);
+  --ct-reader-w: min(calc(29 * var(--ct-fs-body)), 40vw);
+  --ct-dock-bar-h: calc(2.4 * var(--ct-fs-ui));
+  --ct-dock-h: 280px;
+
+  --ct-z-space: 0;
+  --ct-z-status: 2;
+  --ct-z-rail: 3;
+  --ct-z-dock: 5;
+  --ct-z-bar: 10;
+  --ct-z-pop: 20;
+}
+
+/* —— 夜读：系统为深色时 —— */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --ct-ground: #1b1916;
+    --ct-page: #22201c;
+    --ct-sel: #262320;
+
+    --ct-ink-1: #ece4d4;
+    --ct-ink-2: #d4c8b1;
+    --ct-ink-3: #b0a48c;
+    --ct-ink-4: #8a8071;
+
+    --ct-line: #34302a;
+    --ct-line-strong: #4a443a;
+    --ct-edge: #4a443a;
+    --ct-edge-faint: #33302a;
+    --ct-edge-focus: #d8caae;
+
+    --ct-keep: #ece4d4;
+    --ct-open: #c49a5a;
+    --ct-prune: #7c7364;
+    --ct-unknown: #7a7062;
+
+    --ct-ai: #a19a8d;
+    --ct-seal: #c4553b;
+    --ct-seal-fg: #f6eedd;
+
+    --ct-premise: #b08f5a;
+    --ct-example: #8e9a85;
+    --ct-conflict: #c0705c;
+
+    --ct-link: #93a9bc;
+    --ct-warn: #c49a5a;
+    --ct-danger: #c0705c;
+  }
+}
+
+/* —— 显式外观：写在媒体查询之后，优先于系统设置；html 与 UI 根都生效 —— */
+:root[data-ct-theme="paper"],
+[data-ct-theme="paper"] {
+  color-scheme: light;
+
+  --ct-ground: #f3eee4;
+  --ct-page: #faf7f1;
+  --ct-sel: #eae3d3;
+
+  --ct-ink-1: #2b2824;
+  --ct-ink-2: #4a433b;
+  --ct-ink-3: #6b6152;
+  --ct-ink-4: #8f8471;
+
+  --ct-line: #ddd3c1;
+  --ct-line-strong: #c9bba0;
+  --ct-edge: #c4b8a2;
+  --ct-edge-faint: #ded5c4;
+  --ct-edge-focus: #3a342d;
+
+  --ct-keep: #2b2824;
+  --ct-open: #a87732;
+  --ct-prune: #9c9282;
+  --ct-unknown: #a89d8a;
+
+  --ct-ai: #6f6a5f;
+  --ct-seal: #b03a27;
+  --ct-seal-fg: #fbf5e9;
+
+  --ct-premise: #8c6a3c;
+  --ct-example: #7a8471;
+  --ct-conflict: #9b4d3b;
+
+  --ct-link: #33506b;
+  --ct-warn: #a87732;
+  --ct-danger: #9b4d3b;
+}
+
+:root[data-ct-theme="ink"],
+[data-ct-theme="ink"] {
+  color-scheme: dark;
+
+  --ct-ground: #1b1916;
+  --ct-page: #22201c;
+  --ct-sel: #262320;
+
+  --ct-ink-1: #ece4d4;
+  --ct-ink-2: #d4c8b1;
+  --ct-ink-3: #b0a48c;
+  --ct-ink-4: #8a8071;
+
+  --ct-line: #34302a;
+  --ct-line-strong: #4a443a;
+  --ct-edge: #4a443a;
+  --ct-edge-faint: #33302a;
+  --ct-edge-focus: #d8caae;
+
+  --ct-keep: #ece4d4;
+  --ct-open: #c49a5a;
+  --ct-prune: #7c7364;
+  --ct-unknown: #7a7062;
+
+  --ct-ai: #a19a8d;
+  --ct-seal: #c4553b;
+  --ct-seal-fg: #f6eedd;
+
+  --ct-premise: #b08f5a;
+  --ct-example: #8e9a85;
+  --ct-conflict: #c0705c;
+
+  --ct-link: #93a9bc;
+  --ct-warn: #c49a5a;
+  --ct-danger: #c0705c;
+}
+
+
+/* —— 青瓷：冷灰绿底，松墨字；语义色与其它主题一致 —— */
+:root[data-ct-theme="celadon"],
+[data-ct-theme="celadon"] {
+  color-scheme: light;
+
+  --ct-ground: #e9ede8;
+  --ct-page: #f4f6f2;
+  --ct-sel: #dde4dd;
+
+  --ct-ink-1: #1f2a27;
+  --ct-ink-2: #3b4a45;
+  --ct-ink-3: #57685f;
+  --ct-ink-4: #7b8880;
+
+  --ct-line: #cdd6cf;
+  --ct-line-strong: #b9c6bd;
+  --ct-edge: #b3c1b8;
+  --ct-edge-faint: #d7e0d9;
+  --ct-edge-focus: #22302b;
+
+  --ct-keep: #1f2a27;
+  --ct-open: #a87732;
+  --ct-prune: #9aa79f;
+  --ct-unknown: #a3afa7;
+
+  --ct-ai: #6b7873;
+  --ct-seal: #b03a27;
+  --ct-seal-fg: #f5f3ec;
+
+  --ct-premise: #8c6a3c;
+  --ct-example: #6f7d66;
+  --ct-conflict: #9b4d3b;
+
+  --ct-link: #2f5568;
+  --ct-warn: #a87732;
+  --ct-danger: #9b4d3b;
+}
+
+/* —— 暖砂：暖驼底，褐墨字；语义色与其它主题一致 —— */
+:root[data-ct-theme="sand"],
+[data-ct-theme="sand"] {
+  color-scheme: light;
+
+  --ct-ground: #efe3d6;
+  --ct-page: #f8f0e6;
+  --ct-sel: #e7d7c5;
+
+  --ct-ink-1: #2e2620;
+  --ct-ink-2: #4c423a;
+  --ct-ink-3: #6d5f51;
+  --ct-ink-4: #8f7f69;
+
+  --ct-line: #ddcbb6;
+  --ct-line-strong: #cdb79c;
+  --ct-edge: #c6b29a;
+  --ct-edge-faint: #e2d3c0;
+  --ct-edge-focus: #3a2f25;
+
+  --ct-keep: #2e2620;
+  --ct-open: #a87732;
+  --ct-prune: #9c8a73;
+  --ct-unknown: #a8957d;
+
+  --ct-ai: #6f6559;
+  --ct-seal: #b03a27;
+  --ct-seal-fg: #fbf3e6;
+
+  --ct-premise: #8c6a3c;
+  --ct-example: #7a8471;
+  --ct-conflict: #9b4d3b;
+
+  --ct-link: #33506b;
+  --ct-warn: #a87732;
+  --ct-danger: #9b4d3b;
+}
+
+/* —— 减少动态效果：全部时长为 0，静态外观不变 —— */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ct-dur-hover: 0ms;
+    --ct-dur-out: 0ms;
+    --ct-dur-in: 0ms;
+    --ct-dur-open: 0ms;
+    --ct-dur-focus: 0ms;
+    --ct-dur-mark: 0ms;
+    --ct-dur-state: 0ms;
+    --ct-dur-layout: 0ms;
+    --ct-dur-enter: 0ms;
+  }
+}

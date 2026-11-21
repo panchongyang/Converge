@@ -1,0 +1,305 @@
+/**
+ * 应用壳：顶栏高度随字号在 52–66px 之间，三栏并排，1px 细线分隔；不浮在空间上。
+ * 阅读栏、左栏与空间各占一列；栏宽由字号算出；底部开发坞收起时一行，展开 280px。
+ */
+.ct-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--ct-ground);
+  color: var(--ct-ink-1);
+  overflow: hidden;
+}
+
+/* —— 顶栏 —— */
+.ct-top {
+  position: relative;
+  z-index: var(--ct-z-bar);
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: var(--ct-bar-h);
+  padding: 0 var(--ct-s6);
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+  background: var(--ct-ground);
+}
+.ct-top__brand {
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-row);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+/* 树内左上角的上级入口：返回当前工作区的“全部树”，不用图标按钮或浮层。 */
+.ct-top__back {
+  display: inline-flex;
+  flex: none;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--ct-ink-2);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  white-space: nowrap;
+  transition: color var(--ct-dur-hover) var(--ct-ease-out);
+}
+.ct-top__back:hover {
+  color: var(--ct-ink-1);
+}
+.ct-top__backarrow {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-row);
+}
+.ct-top__treeid {
+  flex: none;
+  max-width: 18ch;
+  overflow: hidden;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-id);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ct-top__vr {
+  width: 1px;
+  height: 1.35em;
+  margin: 0 var(--ct-s4);
+  background: var(--ct-line-strong);
+}
+.ct-top__root {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ct-ink-1);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-lead);
+  line-height: 1.4;
+}
+.ct-top__tree {
+  display: inline-flex;
+  flex: none;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--ct-ink-2);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  white-space: nowrap;
+}
+.ct-top__tree:hover {
+  color: var(--ct-ink-1);
+}
+.ct-top__tree-label {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-id);
+}
+.ct-top__tree-id {
+  font-size: var(--ct-fs-id);
+}
+.ct-top__tree-act {
+  color: var(--ct-ink-4);
+  font-size: var(--ct-fs-micro);
+}
+.ct-top__spacer {
+  flex: 1;
+}
+.ct-top__right {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ct-s6);
+  margin-left: var(--ct-s4);
+}
+.ct-top__find {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  white-space: nowrap;
+}
+.ct-top__find:hover {
+  color: var(--ct-ink-1);
+}
+.ct-top__watch {
+  color: var(--ct-ink-2);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  white-space: nowrap;
+}
+.ct-top__watchnum {
+  display: inline-block;
+  animation: ct-watch-in var(--ct-dur-in) var(--ct-ease-out);
+}
+@keyframes ct-watch-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.ct-top__watch:hover,
+.ct-top__watch.is-on {
+  color: var(--ct-ink-1);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ct-top__version {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+  white-space: nowrap;
+}
+.ct-top__version:hover {
+  color: var(--ct-ink-2);
+}
+.ct-top__version.is-on {
+  color: var(--ct-ink-1);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* —— 三栏 —— */
+.ct-main {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+.ct-main.is-combo {
+  grid-template-columns: var(--ct-rail-w) minmax(0, 1fr) var(--ct-reader-w);
+}
+.ct-main.is-space,
+.ct-main.is-outline {
+  grid-template-columns: minmax(0, 1fr) var(--ct-reader-w);
+}
+.ct-rail {
+  min-width: 0;
+  overflow: hidden;
+  border-right: var(--ct-hair) solid var(--ct-line);
+  background: var(--ct-ground);
+}
+.ct-workspace {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ct-ground);
+}
+.ct-workspace__outline {
+  height: 100%;
+  min-height: 0;
+}
+.ct-workspace__outline .ct-ol {
+  padding-bottom: 44px;
+}
+
+/* 阅读方式为「大纲」时，左栏与主区合并为一条宽大纲。 */
+.ct-main.is-outline .ct-workspace {
+  border-right: 0;
+}
+
+/* —— 空状态 / 读取中 / 读取失败 —— */
+.ct-center {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: var(--ct-s9);
+  background: var(--ct-ground);
+}
+.ct-center__text {
+  color: var(--ct-ink-3);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-body);
+}
+.ct-genesis {
+  max-width: 460px;
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-row);
+  line-height: 1.9;
+}
+.ct-genesis h1 {
+  margin-bottom: var(--ct-s3);
+  color: var(--ct-ink-1);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-title);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.ct-genesis p {
+  margin-top: var(--ct-s2);
+}
+.ct-genesis__desc {
+  color: var(--ct-ink-3);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-row);
+}
+.ct-genesis__action {
+  margin-top: var(--ct-s4);
+  color: var(--ct-link);
+  font-size: var(--ct-fs-row);
+}
+.ct-genesis__note {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-id);
+}
+.ct-genesis__error {
+  color: var(--ct-danger);
+}
+
+/* —— 开发坞 —— */
+.ct-dock {
+  flex: none;
+  border-top: var(--ct-hair) solid var(--ct-line);
+  background: var(--ct-ground);
+}
+.ct-dock__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-s3);
+  width: 100%;
+  height: var(--ct-dock-bar-h);
+  padding: 0 var(--ct-s6);
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  text-align: left;
+}
+.ct-dock__bar:hover {
+  background: var(--ct-sel);
+}
+.ct-dock__title {
+  color: var(--ct-ink-2);
+  font-size: var(--ct-fs-ui);
+  white-space: nowrap;
+}
+.ct-dock__hint {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ct-dock__toggle {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+  white-space: nowrap;
+}
+.ct-dock__body {
+  height: var(--ct-dock-h);
+  overflow: auto;
+  border-top: var(--ct-hair) solid var(--ct-line);
+}
+.ct-dock__body[hidden] {
+  display: none;
+}
+
+@media (max-width: 1439px) {
+  .ct-top {
+    padding: 0 var(--ct-s4);
+  }
+  .ct-top__right {
+    gap: var(--ct-s4);
+  }
+}

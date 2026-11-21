@@ -1,0 +1,21 @@
+{
+  "name": "@cognition-tree/kernel",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "认知树业务内核：命令、查询、单树事务端口与内存实现",
+  "exports": {
+    "./catalog": "./src/catalog/index.ts",
+    "./catalog/contracts": "./src/catalog/contracts.ts",
+    "./types": "./src/types/index.ts",
+    "./storage/memory": "./src/storage/memory/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.esonly.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vitest": "5.1.1"
+  }
+}

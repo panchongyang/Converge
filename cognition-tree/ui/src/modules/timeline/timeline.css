@@ -1,0 +1,137 @@
+/**
+ * 时间线：按日分组、从新到旧；形成与人确认分开标注，人确认带朱印。
+ * 只用细线、淡字和等宽时间，不做时间轴导轨与圆点。
+ */
+.ct-tl {
+  color: var(--ct-ink-2);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+}
+.ct-tl__legend {
+  margin-bottom: var(--ct-s3);
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+  line-height: 1.8;
+}
+.ct-tl__kind {
+  display: inline-block;
+  margin: 0 4px 0 10px;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+}
+.ct-tl__kind.is-confirmation {
+  color: var(--ct-ink-2);
+}
+.ct-tl__legend .ct-tl__kind:first-child {
+  margin-left: 0;
+}
+.ct-tl__empty {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+  line-height: 1.9;
+}
+.ct-tl.is-loading {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-tl__day {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: var(--ct-s3);
+  padding: var(--ct-s3) 0;
+  border-top: var(--ct-hair) solid var(--ct-line);
+}
+.ct-tl__date {
+  padding-top: 2px;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+}
+.ct-tl__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-s3);
+  min-width: 0;
+}
+
+.ct-tl__item {
+  min-width: 0;
+  padding-bottom: var(--ct-s3);
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+}
+.ct-tl__item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.ct-tl__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+}
+.ct-tl__action {
+  color: var(--ct-ink-2);
+  font-size: var(--ct-fs-id);
+}
+.ct-tl__by {
+  color: var(--ct-ink-3);
+}
+.ct-tl__at {
+  margin-left: auto;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+}
+.ct-tl__import {
+  padding: 0 4px;
+  border: var(--ct-hair) solid var(--ct-line-strong);
+  border-radius: 1px;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+}
+.ct-tl__summary {
+  margin-top: 3px;
+  color: var(--ct-ink-2);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-ui);
+  line-height: 1.75;
+  text-wrap: pretty;
+}
+.ct-tl__detail {
+  margin-top: 4px;
+  color: var(--ct-ink-3);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-ui);
+  line-height: 1.75;
+}
+.ct-tl__detail-key {
+  margin-right: 6px;
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-micro);
+}
+.ct-tl__detail.is-previous {
+  color: var(--ct-ink-3);
+}
+.ct-tl__nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ct-tl__source {
+  margin-top: 4px;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+}
+
+/* 嵌在阅读栏里的紧凑版：日期缩到行首。 */
+.ct-tl.is-compact .ct-tl__day {
+  grid-template-columns: 60px 1fr;
+  gap: var(--ct-s2);
+}
+.ct-tl.is-compact .ct-tl__summary {
+  font-size: var(--ct-fs-ui);
+}

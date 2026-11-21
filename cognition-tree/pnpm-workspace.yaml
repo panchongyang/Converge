@@ -1,0 +1,13 @@
+# pnpm 12 起，构建脚本白名单等设置从 package.json 移到本文件。
+# 根包 cognition-tree 只放文档制图工具；可运行的包按职责登记在 packages 下。
+packages:
+  - adapters/browser
+  - adapters/dsh
+  - kernel
+  - ui
+# 这里显式声明不运行任何依赖的安装脚本：puppeteer 因此不会下载 Chromium，
+# 渲染改用本机已安装的 Chrome（见 scripts/render-diagrams.mjs）。
+onlyBuiltDependencies: []
+ignoredBuiltDependencies:
+  - puppeteer
+strictDepBuilds: false

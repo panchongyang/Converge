@@ -1,0 +1,19 @@
+---
+title: 认知树文件结构 · 从入口找到状态与规则
+---
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Microsoft YaHei, Segoe UI, sans-serif","fontSize":"15px","lineColor":"#5b6b82","edgeLabelBackground":"#ffffff","clusterBkg":"#fbfcfe","clusterBorder":"#c3cedd"},"flowchart":{"curve":"basis","htmlLabels":false}}}%%
+flowchart TB
+  ROOT["Converge/<br/>研究材料 · 手工认知树.md"] --> PRODUCT["cognition-tree/<br/>产品入口 · pnpm workspace"]
+  PRODUCT --> DOC["docs/ · scripts/<br/>设计依据、结构图与制图工具"]
+  PRODUCT --> B["adapters/browser/<br/>网页入口 · 本地 client · 样例 · 模拟器"]
+  PRODUCT --> K["kernel/src/<br/>不依赖宿主的业务内核"]
+  PRODUCT --> U["ui/src/<br/>复用的 React 18 界面"]
+  B --> BS["adapter/<br/>localStorage 测试存储 · 出处阅读器 · 开发坞"]
+  K --> KC["catalog · models · commands · operations<br/>角色分派、事务、意图校验、显式变更"]
+  K --> KR["queries · types · utils<br/>有界读取、领域与端口契约、纯计算"]
+  K --> KM["storage/memory<br/>单树事务、版本、索引与快照"]
+  U --> UM["app · modules · models<br/>应用壳、阅读与编辑、客户端状态"]
+  U --> UT["types · hooks · components · utils · styles<br/>端口、通用交互、组件、计算与外观"]
+  PRODUCT --> D["adapters/dsh/src<br/>宿主适配层"]
+  D --> SERVER["server/host · backend · storage<br/>受信入口 · 工作线程 · 单树 SQLite"]
+  D --> CLIENT["client<br/>主面板 · 侧栏 · 聊天卡 · 建树与切换"]

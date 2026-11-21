@@ -1,0 +1,505 @@
+/**
+ * 通用样式：重置、排版、文字按钮、书写框、键盘焦点、滚动条与少量原子件。
+ *
+ * 视觉约定：内容先于界面；只用细线、留白与字的层次。控件就是文字，不加底色块、胶囊和投影；
+ * 可编辑文字悬停时出现点状下划线。颜色与时长一律引用 tokens.css 的变量。
+ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+html {
+  background: var(--ct-ground);
+}
+
+body {
+  background: var(--ct-ground);
+  color: var(--ct-ink-1);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-row);
+  line-height: var(--ct-lh-ui);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+p,
+h1,
+h2,
+h3,
+ol,
+ul,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+
+ol,
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: var(--ct-link);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+::selection {
+  background: var(--ct-sel);
+}
+
+/* 键盘焦点：一条细墨环，不用投影。 */
+:focus-visible {
+  outline: var(--ct-focus-w) solid var(--ct-link);
+  outline-offset: 2px;
+  border-radius: var(--ct-r);
+}
+
+[data-ct-theme] {
+  background-color: var(--ct-ground);
+}
+
+.ct-serif {
+  font-family: var(--ct-serif);
+}
+
+.ct-mono {
+  font-family: var(--ct-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ct-muted {
+  color: var(--ct-ink-3);
+}
+
+.ct-faint {
+  color: var(--ct-ink-3);
+}
+
+.ct-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* —— 细滚动条 —— */
+.ct-scroll {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ct-line-strong) transparent;
+}
+.ct-scroll::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+.ct-scroll::-webkit-scrollbar-thumb {
+  background: var(--ct-line-strong);
+  border-radius: var(--ct-r);
+}
+.ct-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* —— 文字按钮与文字链接 —— */
+.ct-textbtn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ct-ink-2);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: color var(--ct-dur-hover) var(--ct-ease-out);
+}
+.ct-textbtn:hover {
+  color: var(--ct-ink-1);
+}
+.ct-textbtn[disabled] {
+  color: var(--ct-ink-4);
+  cursor: default;
+}
+
+.ct-link {
+  color: var(--ct-link);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.ct-link:hover {
+  text-decoration-style: solid;
+}
+
+/* 能编辑或能展开的文字：悬停时出现点状下划线。 */
+.ct-editable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
+  transition: text-decoration-color var(--ct-dur-hover) var(--ct-ease-out);
+}
+.ct-editable:hover {
+  text-decoration-color: var(--ct-ink-3);
+}
+
+.ct-kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 0.35em;
+  border: var(--ct-hair) solid var(--ct-line-strong);
+  border-radius: var(--ct-r);
+  color: var(--ct-ink-3);
+  font-family: var(--ct-mono);
+  font-size: var(--ct-fs-micro);
+  line-height: 1.45;
+  text-align: center;
+}
+
+/* —— 通用按钮（表单动作、开发坞）：仍以文字为主 —— */
+.ct-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 0;
+  border: 0;
+  background: none;
+  color: var(--ct-ink-2);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--ct-dur-hover) var(--ct-ease-out);
+}
+.ct-btn:hover {
+  color: var(--ct-ink-1);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.ct-btn[disabled] {
+  color: var(--ct-ink-4);
+  cursor: default;
+  text-decoration: none;
+}
+.ct-btn--primary,
+.ct-btn--confirm {
+  padding: 3px 10px;
+  border: var(--ct-hair) solid var(--ct-line-strong);
+  border-radius: var(--ct-r);
+  color: var(--ct-ink-1);
+}
+.ct-btn--danger {
+  color: var(--ct-danger);
+}
+.ct-btn--ghost {
+  color: var(--ct-ink-3);
+}
+.ct-btn--active {
+  color: var(--ct-ink-1);
+  text-decoration: underline;
+  text-decoration-style: solid;
+  text-underline-offset: 3px;
+}
+.ct-btn--sm {
+  font-size: var(--ct-fs-ui);
+}
+.ct-btn--icon {
+  min-width: 1.7em;
+  justify-content: center;
+}
+.ct-btn__loading {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+}
+
+/* —— 文字分段选择：当前项加下划线，不做底色块 —— */
+.ct-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+.ct-seg__opt {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+  cursor: pointer;
+  transition: color var(--ct-dur-hover) var(--ct-ease-out);
+}
+.ct-seg__opt:hover {
+  color: var(--ct-ink-1);
+}
+.ct-seg__opt[aria-pressed='true'] {
+  color: var(--ct-ink-1);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.ct-seg__opt[disabled] {
+  color: var(--ct-ink-4);
+  cursor: default;
+}
+.ct-seg--sm .ct-seg__opt {
+  font-size: var(--ct-fs-ui);
+}
+
+/* —— 表单：只有一条极淡的底线，没有边框与底色 —— */
+.ct-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ct-field__label {
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+}
+.ct-field__hint {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-id);
+}
+.ct-input,
+.ct-textarea,
+.ct-select {
+  width: 100%;
+  padding: 3px 0 5px;
+  border: 0;
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+  border-radius: 0;
+  background: none;
+  color: var(--ct-ink-1);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-body);
+  line-height: var(--ct-lh-body);
+  transition: border-color var(--ct-dur-hover) var(--ct-ease-out);
+}
+.ct-input:focus,
+.ct-textarea:focus,
+.ct-select:focus {
+  outline: none;
+  border-bottom-color: var(--ct-ink-3);
+}
+.ct-textarea {
+  resize: vertical;
+  min-height: 32px;
+}
+.ct-select {
+  appearance: none;
+  cursor: pointer;
+}
+.ct-input::placeholder,
+.ct-textarea::placeholder {
+  color: var(--ct-ink-4);
+}
+
+/* —— 稳定 ID 与出处链接 —— */
+.ct-chip {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ct-link);
+  font-family: var(--ct-mono);
+  font-size: var(--ct-fs-id);
+  line-height: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.ct-chip:hover {
+  text-decoration-style: solid;
+}
+
+.ct-source {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-bottom: var(--ct-hair) dotted var(--ct-link);
+  background: none;
+  color: var(--ct-link);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+.ct-source:hover {
+  border-bottom-style: solid;
+}
+
+@keyframes ct-seal-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* —— 状态原子件 —— */
+.ct-seal {
+  display: inline-flex;
+  animation: ct-seal-in var(--ct-dur-mark) var(--ct-ease-out);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1px;
+  background: var(--ct-seal);
+  color: var(--ct-seal-fg);
+  font-family: var(--ct-serif);
+  line-height: 1;
+  vertical-align: 1px;
+}
+
+.ct-statetext,
+.ct-confirmtext,
+.ct-statuspair {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.ct-statetext.is-prune,
+.ct-confirmtext.is-unknown {
+  color: var(--ct-ink-3);
+}
+.ct-statetext.is-unknown {
+  color: var(--ct-ink-3);
+}
+.ct-confirmtext.is-proposed {
+  color: var(--ct-ai);
+}
+.ct-statuspair__dot {
+  color: var(--ct-ink-4);
+}
+.ct-originmark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15em;
+  height: 1.15em;
+  border: var(--ct-hair) solid var(--ct-line-strong);
+  border-radius: 1px;
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-micro);
+  line-height: 1;
+}
+.ct-origintext {
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  white-space: nowrap;
+}
+.ct-field__req {
+  color: var(--ct-ink-3);
+}
+.ct-refkind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  white-space: nowrap;
+}
+.ct-refkind__line {
+  width: 18px;
+  border-top: var(--ct-hair) solid currentColor;
+}
+.ct-refkind.is-premise {
+  color: var(--ct-premise);
+}
+.ct-refkind.is-example .ct-refkind__line {
+  border-top-style: dotted;
+  border-top-width: 2px;
+}
+.ct-refkind.is-example {
+  color: var(--ct-example);
+}
+.ct-refkind.is-conflict {
+  color: var(--ct-conflict);
+}
+.ct-refkind.is-conflict .ct-refkind__line {
+  border-top-style: dashed;
+}
+
+/* —— 少量共用状态 —— */
+.ct-empty {
+  padding: var(--ct-s8) var(--ct-s5);
+  color: var(--ct-ink-3);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-body);
+  text-align: center;
+}
+
+.ct-banner {
+  padding: var(--ct-s2) 0;
+  border-top: var(--ct-hair) solid var(--ct-line);
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+  color: var(--ct-ink-2);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+}
+.ct-banner--danger {
+  color: var(--ct-danger);
+}
+.ct-banner--warn {
+  color: var(--ct-warn);
+}
+
+/* —— 减少动态：不播放任何过渡与动画 —— */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    transition-delay: 0ms !important;
+  }
+}

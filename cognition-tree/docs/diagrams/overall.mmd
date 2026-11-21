@@ -1,0 +1,99 @@
+---
+title: 认知树 MVP · 总体架构（目标设计）
+---
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Microsoft YaHei, Segoe UI, sans-serif","fontSize":"15px","lineColor":"#5b6b82","edgeLabelBackground":"#ffffff","clusterBkg":"#fbfcfe","clusterBorder":"#c3cedd"},"flowchart":{"curve":"basis","htmlLabels":false}}}%%
+flowchart TB
+  HUMAN["人"]
+  AGENT["DSH Agent"]
+  PANEL["DSH 侧栏主面板<br/>/ 聊天提议卡"]
+  WEB["独立网页"]
+  DSHC["adapters/dsh/src/client<br/>槽位注册 · HTTP · 宿主桥"]
+  BCL["adapters/browser<br/>本地 client"]
+  UI["ui/src<br/>共用应用壳<br/>功能模块 · UI 模型"]
+  PORT["ui/src/types<br/>CognitionClient / HostBridge"]
+  TOOLS["dsh/src/server/host<br/>AI 工具"]
+  SRV["dsh/src/server/host<br/>人侧路由"]
+  CAT["kernel/src/catalog"]
+  MODELS["kernel/src/models"]
+  STORE["TreeStore 契约"]
+  FS["工作区/.converge/<br/>单树 SQLite"]
+  BS["独立网页：内存索引<br/>localStorage 测试存储"]
+  MCP["MCP 适配器<br/>（未来，v1 不实现）"]:::future
+
+  HUMAN -->|"打开"| PANEL
+  HUMAN -->|"打开"| WEB
+  AGENT -->|"工具调用"| TOOLS
+  PANEL -->|"装配"| DSHC
+  WEB -->|"装配"| BCL
+  DSHC -->|"挂载同一<br/>应用壳"| UI
+  BCL -->|"挂载同一<br/>应用壳"| UI
+  UI -->|"调用端口"| PORT
+  DSHC -->|"实现端口"| PORT
+  BCL -->|"实现端口"| PORT
+  DSHC -->|"HTTP / JSON"| SRV
+  BCL -->|"同一操作目录，不经 DSH"| CAT
+  TOOLS --> CAT
+  SRV --> CAT
+  CAT -->|"按身份分派"| MODELS
+  MODELS -->|"持久化"| STORE
+  STORE -->|"DSH 注入"| FS
+  STORE -->|"独立网页注入"| BS
+  MCP -.->|"未来：接同一 catalog"| CAT
+
+  classDef target fill:#e8f1ff,stroke:#2f6fd0,stroke-width:1.5px,color:#10233f
+  classDef landed fill:#e7f7ed,stroke:#2e7d4f,stroke-width:1.5px,color:#12351f
+  classDef future fill:#f4f5f7,stroke:#8a94a6,stroke-width:1.5px,stroke-dasharray:6 4,color:#3f4753
+  class HUMAN,AGENT,PANEL,WEB,DSHC,BCL,UI,PORT,TOOLS,SRV,CAT,MODELS,STORE,FS,BS target
+
+%% 固定布局由 pnpm run diagrams 使用；Mermaid 把以下坐标当作注释。
+%% nodes: [x, y, 宽, 高, 可选配色]；zones: [x, y, 宽, 高, 分组标题, 配色]。
+%% routes: [起点到终点的折点列表, 可选的标签坐标 [x, 基线 y, 对齐方式]]。
+%% layout
+%% {
+%%   "height": 1072,
+%%   "caption": "DSH 与独立网页复用 UI 和业务内核",
+%%   "zones": [
+%%     [24,96,912,362,"用户入口 · 共用 UI","ui"],
+%%     [24,470,912,578,"后端路径","kernel"]
+%%   ],
+%%   "nodes": {
+%%     "HUMAN": [406,114,148,42],
+%%     "PANEL": [44,188,232,54],
+%%     "WEB": [684,188,232,54],
+%%     "DSHC": [44,276,232,66],
+%%     "BCL": [684,276,232,66],
+%%     "UI": [360,276,240,66,"ui"],
+%%     "PORT": [360,386,240,58,"port"],
+%%     "AGENT": [44,508,220,42],
+%%     "TOOLS": [44,584,220,54],
+%%     "SRV": [288,584,232,54],
+%%     "MCP": [616,584,224,54,"future"],
+%%     "CAT": [348,708,264,50,"kernel"],
+%%     "MODELS": [348,794,264,50,"kernel"],
+%%     "STORE": [348,880,264,50,"port"],
+%%     "FS": [44,980,274,56,"store"],
+%%     "BS": [642,980,274,56,"store"]
+%%   },
+%%   "routes": {
+%%     "HUMAN>PANEL": [[[444,156],[444,172],[160,172],[160,188]],[192,165]],
+%%     "HUMAN>WEB": [[[516,156],[516,172],[800,172],[800,188]],[768,165]],
+%%     "AGENT>TOOLS": [[[154,550],[154,584]],[166,572,"start"]],
+%%     "PANEL>DSHC": [[[160,242],[160,276]],[172,264,"start"]],
+%%     "WEB>BCL": [[[800,242],[800,276]],[812,264,"start"]],
+%%     "DSHC>UI": [[[276,309],[360,309]],[318,282]],
+%%     "BCL>UI": [[[684,309],[600,309]],[642,282]],
+%%     "UI>PORT": [[[480,342],[480,386]],[492,369,"start"]],
+%%     "DSHC>PORT": [[[240,342],[240,415],[360,415]],[300,404]],
+%%     "BCL>PORT": [[[720,342],[720,415],[600,415]],[660,404]],
+%%     "DSHC>SRV": [[[182,342],[182,498],[404,498],[404,584]],[292,488]],
+%%     "BCL>CAT": [[[900,342],[900,683],[588,683],[588,708]],[736,703]],
+%%     "TOOLS>CAT": [[[154,638],[154,664],[376,664],[376,708]]],
+%%     "SRV>CAT": [[[404,638],[404,708]]],
+%%     "CAT>MODELS": [[[480,758],[480,794]],[494,781,"start"]],
+%%     "MODELS>STORE": [[[480,844],[480,880]],[494,867,"start"]],
+%%     "STORE>FS": [[[410,930],[410,959],[181,959],[181,980]],[293,948]],
+%%     "STORE>BS": [[[550,930],[550,959],[779,959],[779,980]],[667,948]],
+%%     "MCP>CAT": [[[728,638],[728,669],[540,669],[540,708]],[630,659]]
+%%   }
+%% }
+%% /layout

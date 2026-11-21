@@ -1,0 +1,244 @@
+/**
+ * 开发坞：只在独立网页出现，样式与阅读界面同样克制。
+ * 两栏并排，用细线分隔；没有投影、底色块与图标按钮组。
+ */
+.ct-dev {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr);
+  height: 100%;
+  min-height: 0;
+  background: var(--ct-ground);
+  color: var(--ct-ink-2);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-id);
+}
+
+.ct-dev__col {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--ct-s3) var(--ct-s5) var(--ct-s4);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ct-line-strong) transparent;
+}
+.ct-dev__col + .ct-dev__col {
+  border-left: var(--ct-hair) solid var(--ct-line);
+}
+
+.ct-dev__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ct-s2);
+  margin-bottom: var(--ct-s3);
+}
+.ct-dev__title {
+  color: var(--ct-ink-2);
+  font-size: var(--ct-fs-ui);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.ct-dev__sub {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+}
+.ct-dev__head .ct-textbtn {
+  margin-left: auto;
+  color: var(--ct-link);
+  font-size: var(--ct-fs-id);
+}
+
+/* —— 场景 —— */
+.ct-dev__scenarios {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--ct-s5);
+}
+.ct-dev__scenario {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 0;
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+  text-align: left;
+  color: var(--ct-ink-2);
+  transition: color var(--ct-dur-hover) var(--ct-ease-out);
+}
+.ct-dev__scenario:hover {
+  color: var(--ct-ink-1);
+}
+.ct-dev__scenario:hover .ct-dev__scenario-title {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.ct-dev__scenario[disabled] {
+  color: var(--ct-ink-4);
+  cursor: default;
+}
+.ct-dev__scenario-kind {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+  letter-spacing: 0.04em;
+}
+.ct-dev__scenario.is-rejected .ct-dev__scenario-kind {
+  color: var(--ct-danger);
+}
+.ct-dev__scenario-title {
+  color: inherit;
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-id);
+  line-height: 1.5;
+}
+.ct-dev__scenario-desc {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+  line-height: 1.45;
+}
+
+/* —— 调用记录 —— */
+.ct-dev__log {
+  margin-top: var(--ct-s3);
+  border-top: var(--ct-hair) solid var(--ct-line-strong);
+  padding-top: var(--ct-s2);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ct-dev__log-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+  line-height: 1.6;
+}
+.ct-dev__log-item.is-ok .ct-dev__log-title {
+  color: var(--ct-ink-1);
+}
+.ct-dev__log-item.is-rejected .ct-dev__log-detail {
+  color: var(--ct-open);
+}
+.ct-dev__log-item.is-unexpected .ct-dev__log-detail {
+  color: var(--ct-danger);
+}
+.ct-dev__log-at {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+}
+.ct-dev__log-title {
+  color: var(--ct-ink-2);
+}
+.ct-dev__log-detail {
+  flex-basis: 100%;
+  padding-left: 48px;
+  color: var(--ct-ink-3);
+}
+
+/* —— 存储与预算 —— */
+.ct-dev__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--ct-s3);
+}
+.ct-dev__stats > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ct-s2);
+}
+.ct-dev__stats dt {
+  flex: none;
+  width: 76px;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+}
+.ct-dev__stats dd {
+  color: var(--ct-ink-2);
+  font-size: var(--ct-fs-id);
+}
+.ct-dev__ctl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ct-s3);
+  padding: 4px 0;
+}
+.ct-dev__label {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+  white-space: nowrap;
+}
+.ct-dev__note {
+  margin-top: var(--ct-s2);
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+  line-height: 1.6;
+}
+
+/* —— 自拟提议 —— */
+.ct-dev__composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-s2);
+}
+.ct-dev__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ct-s3);
+}
+.ct-dev__row.is-end {
+  justify-content: space-between;
+  margin-top: var(--ct-s1);
+}
+.ct-dev__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ct-s3);
+}
+.ct-dev__target {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-micro);
+}
+.ct-dev__target .ct-input {
+  width: 90px;
+}
+.ct-dev__select {
+  width: auto;
+  min-width: 78px;
+}
+.ct-dev__ref {
+  flex: 1;
+  min-width: 140px;
+}
+.ct-dev .ct-input,
+.ct-dev .ct-textarea,
+.ct-dev .ct-select {
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-id);
+  line-height: 1.5;
+  padding: 2px 0 3px;
+}
+.ct-dev .ct-field__label {
+  font-size: var(--ct-fs-micro);
+}
+.ct-dev .ct-banner {
+  font-size: var(--ct-fs-micro);
+}
+
+@media (max-width: 1439px) {
+  .ct-dev {
+    grid-template-columns: minmax(0, 1.2fr) minmax(300px, 1fr);
+  }
+  .ct-dev__scenarios {
+    grid-template-columns: 1fr;
+  }
+}

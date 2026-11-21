@@ -1,0 +1,124 @@
+/**
+ * 树入口：与查找浮层同一套“页面底色 + 强细线”的画法，不用投影和模糊。
+ * 空状态与顶栏打开的是同一张表单；宽度控制在表单可读范围内。
+ */
+.ct-treeveil {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ct-z-pop);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 11vh var(--ct-s6) var(--ct-s4);
+  overflow: auto;
+  background: color-mix(in srgb, var(--ct-ground) 84%, transparent);
+  animation: ct-tree-in var(--ct-dur-out) var(--ct-ease-out);
+}
+
+.ct-treeentry {
+  width: min(520px, calc(100vw - 48px));
+  padding: var(--ct-s6);
+  border: var(--ct-hair) solid var(--ct-line-strong);
+  border-radius: var(--ct-r-max);
+  background: var(--ct-page);
+  color: var(--ct-ink-1);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-row);
+  line-height: var(--ct-lh-body);
+}
+
+.ct-treeentry__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ct-s4);
+  margin-bottom: var(--ct-s2);
+}
+
+.ct-treeentry__title {
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-lead);
+}
+
+.ct-treeentry__close {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-treeentry__hint {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-treeentry__section {
+  margin-top: var(--ct-s4);
+}
+
+.ct-treeentry__label {
+  margin-bottom: var(--ct-s1);
+  color: var(--ct-ink-2);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-body);
+}
+
+.ct-treeentry__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--ct-s3);
+}
+
+.ct-treeentry__row .ct-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.ct-treeentry__row .ct-btn {
+  flex: none;
+  margin-bottom: 2px;
+}
+
+.ct-treeentry__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--ct-s2);
+}
+
+.ct-treeentry__sep {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-s3);
+  margin-top: var(--ct-s5);
+  color: var(--ct-ink-4);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-treeentry__sep::before,
+.ct-treeentry__sep::after {
+  content: '';
+  flex: 1;
+  border-top: var(--ct-hair) solid var(--ct-line);
+}
+
+.ct-treeentry__note {
+  margin-top: var(--ct-s1);
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-treeentry__error {
+  margin-top: var(--ct-s3);
+  padding-top: var(--ct-s2);
+  border-top: var(--ct-hair) solid var(--ct-line);
+  color: var(--ct-danger);
+  font-size: var(--ct-fs-ui);
+  white-space: pre-wrap;
+}
+
+@keyframes ct-tree-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

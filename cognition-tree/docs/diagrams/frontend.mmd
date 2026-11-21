@@ -1,0 +1,78 @@
+---
+title: 前端 · 两个壳共用 UI（目标设计，React 18）
+---
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Microsoft YaHei, Segoe UI, sans-serif","fontSize":"15px","lineColor":"#5b6b82","edgeLabelBackground":"#ffffff","clusterBkg":"#fbfcfe","clusterBorder":"#c3cedd"},"flowchart":{"curve":"basis","htmlLabels":false}}}%%
+flowchart TB
+  DSHC["DSH client<br/>槽位注册<br/>HTTP · 宿主桥"]
+  SHELL["独立网页入口<br/>browser"]
+  subgraph UI["ui/src"]
+    APP["app<br/>共用应用壳"]
+    MOD["modules<br/>树阅读 · 节点详情 · 变更与确认"]
+    MODEL["models<br/>选中 · 展开<br/>未提交输入"]
+    HOOK["hooks<br/>通用交互"]
+    CMP["components<br/>通用原子件"]
+    TYPES["types<br/>CognitionClient / HostBridge"]
+  end
+  BCL["browser<br/>本地 client"]
+  SERVER["adapters/dsh/<br/>src/server"]
+  KERNEL["kernel/src"]
+
+  DSHC -->|"装配"| APP
+  SHELL -->|"装配"| APP
+  APP --> MOD
+  MOD --> MODEL
+  MOD --> HOOK
+  MOD --> CMP
+  MODEL -->|"依赖端口"| TYPES
+  DSHC -->|"实现端口"| TYPES
+  BCL -->|"实现端口"| TYPES
+  DSHC -->|"HTTP"| SERVER
+  BCL -->|"同一真内核"| KERNEL
+  TYPES -.->|"只 import type"| KERNEL
+
+  classDef target fill:#e8f1ff,stroke:#2f6fd0,stroke-width:1.5px,color:#10233f
+  classDef landed fill:#e7f7ed,stroke:#2e7d4f,stroke-width:1.5px,color:#12351f
+  classDef future fill:#f4f5f7,stroke:#8a94a6,stroke-width:1.5px,stroke-dasharray:6 4,color:#3f4753
+  class DSHC,SHELL,APP,MOD,MODEL,HOOK,CMP,TYPES,BCL,SERVER,KERNEL target
+
+%% 固定布局由 pnpm run diagrams 使用；Mermaid 把以下坐标当作注释。
+%% nodes: [x, y, 宽, 高, 可选配色]；zones: [x, y, 宽, 高, 分组标题, 配色]。
+%% routes: [起点到终点的折点列表, 可选的标签坐标 [x, 基线 y, 对齐方式]]。
+%% layout
+%% {
+%%   "height": 690,
+%%   "caption": "DSH 与独立浏览器分别接线",
+%%   "zones": [
+%%     [24,96,196,298,"DSH",""],
+%%     [242,96,476,482,"ui/src · React 18","ui"],
+%%     [740,96,196,298,"独立浏览器",""]
+%%   ],
+%%   "nodes": {
+%%     "DSHC": [44,160,164,78],
+%%     "SHELL": [752,160,164,78],
+%%     "APP": [354,160,252,78,"ui"],
+%%     "MOD": [354,274,252,60,"ui"],
+%%     "HOOK": [258,380,124,70,"ui"],
+%%     "MODEL": [398,380,164,70,"ui"],
+%%     "CMP": [578,380,124,70,"ui"],
+%%     "TYPES": [354,496,252,62,"port"],
+%%     "SERVER": [44,298,164,72],
+%%     "BCL": [752,298,164,72],
+%%     "KERNEL": [752,606,164,60,"kernel"]
+%%   },
+%%   "routes": {
+%%     "DSHC>APP": [[[208,199],[354,199]],[281,188]],
+%%     "SHELL>APP": [[[752,199],[606,199]],[679,188]],
+%%     "APP>MOD": [[[480,238],[480,274]]],
+%%     "MOD>MODEL": [[[480,334],[480,380]]],
+%%     "MOD>HOOK": [[[404,334],[404,354],[320,354],[320,380]]],
+%%     "MOD>CMP": [[[556,334],[556,354],[640,354],[640,380]]],
+%%     "MODEL>TYPES": [[[480,450],[480,496]],[494,478,"start"]],
+%%     "DSHC>TYPES": [[[208,222],[231,222],[231,527],[354,527]],[292,516]],
+%%     "BCL>TYPES": [[[752,334],[729,334],[729,527],[606,527]],[670,516]],
+%%     "DSHC>SERVER": [[[126,238],[126,298]],[140,271,"start"]],
+%%     "BCL>KERNEL": [[[834,370],[834,606]],[849,497,"start"]],
+%%     "TYPES>KERNEL": [[[480,558],[480,636],[752,636]],[615,624]]
+%%   }
+%% }
+%% /layout

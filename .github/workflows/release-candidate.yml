@@ -1,0 +1,77 @@
+# 只验证并保存候选件；DSH 目录收录和目录点装另行验收，不在此发布。
+name: DSH release candidate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dsh-candidate:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.22.2'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '12.18.0'
+
+      - name: Check candidate source boundary
+        run: |
+          if (Test-Path -LiteralPath '.converge') {
+            throw 'The candidate source must not contain workspace cognition data.'
+          }
+      - name: Install from lockfile
+        run: pnpm --dir cognition-tree install --frozen-lockfile
+      - name: Type check
+        run: pnpm --dir cognition-tree -r --if-present run typecheck
+      - name: Test
+        run: pnpm --dir cognition-tree -r --if-present run test
+      - name: Build plugin
+        run: pnpm --dir cognition-tree/adapters/dsh run build
+      - name: Check offline loading
+        run: node cognition-tree/adapters/dsh/scripts/check-package.mjs
+      - name: Pack candidate and record provenance
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $stage = Join-Path $PWD '.local-work/dsh-plugin'
+          $out = Join-Path $PWD '.local-work/release-candidate'
+          $sourceManifest = Get-Content -LiteralPath 'cognition-tree/adapters/dsh/package.json' -Raw | ConvertFrom-Json
+          $builtManifest = Get-Content -LiteralPath (Join-Path $stage 'package.json') -Raw | ConvertFrom-Json
+          if ($builtManifest.name -ne $sourceManifest.name -or $builtManifest.version -ne $sourceManifest.version -or $builtManifest.license -ne 'BSD-3-Clause') {
+            throw 'Built package identity or license does not match the candidate.'
+          }
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          npm pack $stage --ignore-scripts --pack-destination $out
+          $packs = @(Get-ChildItem -LiteralPath $out -Filter '*.tgz' -File)
+          if ($packs.Count -ne 1) { throw 'Expected exactly one candidate archive.' }
+          $pack = $packs[0]
+          $expected = @('package/package.json', 'package/LICENSE', 'package/cordis.patch.yml', 'package/lib/index.js', 'package/lib/worker.js', 'package/lib/client.js')
+          $entries = @(tar.exe -tf $pack.FullName)
+          if (Compare-Object -ReferenceObject $expected -DifferenceObject $entries) {
+            throw 'Unexpected files in candidate archive.'
+          }
+          git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $out 'source-commit.txt') -Encoding utf8
+          $digest = (Get-FileHash -LiteralPath $pack.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$digest  $($pack.Name)" | Set-Content -LiteralPath (Join-Path $out 'SHA256SUMS.txt') -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsh-release-candidate
+          path: |
+            .local-work/release-candidate/*.tgz
+            .local-work/release-candidate/source-commit.txt
+            .local-work/release-candidate/SHA256SUMS.txt
+          include-hidden-files: true
+          if-no-files-found: error

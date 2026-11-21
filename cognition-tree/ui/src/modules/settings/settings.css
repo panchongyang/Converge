@@ -1,0 +1,168 @@
+/**
+ * 设置弹窗：一层半透明底 + 一条强细线，与查找同一种浮层语言；不用投影与模糊。
+ * 色块直接引用主题令牌；切换某一块的 data-ct-theme 就能预览那套外观。
+ */
+.ct-settings-veil {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ct-z-pop);
+  display: flex;
+  justify-content: center;
+  padding-top: 12vh;
+  background: color-mix(in srgb, var(--ct-ground) 84%, transparent);
+  animation: ct-settings-in var(--ct-dur-out) var(--ct-ease-out);
+}
+@keyframes ct-settings-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.ct-settings {
+  display: flex;
+  flex-direction: column;
+  width: min(620px, calc(100vw - 64px));
+  max-height: 74vh;
+  border: var(--ct-hair) solid var(--ct-line-strong);
+  border-radius: var(--ct-r-max);
+  background: var(--ct-page);
+}
+.ct-settings__bar {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: var(--ct-s3);
+  padding: var(--ct-s3) var(--ct-s4);
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+}
+.ct-settings__title {
+  color: var(--ct-ink-1);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-lead);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.ct-settings__close {
+  margin-left: auto;
+}
+.ct-settings__body {
+  padding: var(--ct-s4) var(--ct-s5) var(--ct-s6);
+  overflow: auto;
+}
+.ct-settings__note {
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+}
+.ct-settings__group {
+  margin-top: var(--ct-s5);
+}
+.ct-settings__label {
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+}
+.ct-settings__themes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
+  gap: var(--ct-s2);
+  margin-top: var(--ct-s2);
+}
+.ct-settings__theme {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-s2);
+  padding: var(--ct-s2);
+  border: var(--ct-hair) solid var(--ct-line);
+  border-radius: var(--ct-r);
+  background: var(--ct-page);
+  text-align: left;
+  transition: border-color var(--ct-dur-hover) var(--ct-ease-out);
+}
+.ct-settings__theme:hover {
+  border-color: var(--ct-line-strong);
+}
+.ct-settings__theme.is-on {
+  border-color: var(--ct-ink-3);
+}
+.ct-settings__swatch {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: var(--ct-hair) solid var(--ct-line-strong);
+  border-radius: var(--ct-r);
+  background: var(--ct-ground);
+}
+.ct-settings__swatch::after {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ct-ink-1);
+}
+.ct-settings__swatch.is-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.ct-settings__swatch.is-split::after {
+  content: none;
+}
+.ct-settings__swatch.is-split span {
+  display: block;
+  height: 100%;
+  background: var(--ct-ground);
+}
+.ct-settings__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ct-settings__name {
+  color: var(--ct-ink-1);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-ui);
+}
+.ct-settings__desc {
+  color: var(--ct-ink-3);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-micro);
+}
+.ct-settings__rows {
+  margin-top: var(--ct-s2);
+  border-top: var(--ct-hair) solid var(--ct-line);
+}
+.ct-settings__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ct-s3);
+  width: 100%;
+  padding: var(--ct-s2) 0;
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+  text-align: left;
+  transition: background var(--ct-dur-hover) var(--ct-ease-out);
+}
+.ct-settings__row:hover {
+  background: var(--ct-sel);
+}
+.ct-settings__row .ct-settings__desc {
+  margin-left: auto;
+}
+.ct-settings__mark {
+  width: 1em;
+  color: var(--ct-open);
+}
+.ct-settings__row.is-on .ct-settings__name {
+  font-weight: 600;
+}

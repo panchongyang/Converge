@@ -1,0 +1,70 @@
+---
+title: 后端与内核 · 调用顺序（目标设计）
+---
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Microsoft YaHei, Segoe UI, sans-serif","fontSize":"15px","lineColor":"#5b6b82","edgeLabelBackground":"#ffffff","clusterBkg":"#fbfcfe","clusterBorder":"#c3cedd"},"flowchart":{"curve":"basis","htmlLabels":false}}}%%
+flowchart LR
+  TOOLS["入口：dsh tools"]
+  WIRE["可信工作区与 actor<br/>首次调用启动工作线程"]
+  ROUTES["入口：dsh routes"]
+  CAT["catalog<br/>按身份取子集"]
+  MODELS["models<br/>唯一写入口"]
+  CMD["commands<br/>树语义"]
+  OPS["operations<br/>纯变更原语"]
+  QRY["queries<br/>读投影"]
+  PORT["TreeStore 契约"]
+  FS["工作区/.converge/<br/>每树一个 SQLite 主库"]
+
+  TOOLS --> WIRE
+  ROUTES --> WIRE
+  WIRE -->|"actor + 请求"| CAT
+  CAT -->|"分派用例"| MODELS
+  MODELS -->|"提交：校验意图"| CMD
+  CMD -->|"显式变更"| OPS
+  CAT -->|"只读用例"| QRY
+  QRY -->|"开快照"| PORT
+  MODELS -->|"持久化"| PORT
+  PORT -->|"注入的实现"| FS
+
+  classDef target fill:#e8f1ff,stroke:#2f6fd0,stroke-width:1.5px,color:#10233f
+  classDef landed fill:#e7f7ed,stroke:#2e7d4f,stroke-width:1.5px,color:#12351f
+  classDef future fill:#f4f5f7,stroke:#8a94a6,stroke-width:1.5px,stroke-dasharray:6 4,color:#3f4753
+  class TOOLS,ROUTES,WIRE,CAT,MODELS,CMD,OPS,QRY,PORT,FS target
+
+%% 固定布局由 pnpm run diagrams 使用；Mermaid 把以下坐标当作注释。
+%% nodes: [x, y, 宽, 高, 可选配色]；zones: [x, y, 宽, 高, 分组标题, 配色]。
+%% routes: [起点到终点的折点列表, 可选的标签坐标 [x, 基线 y, 对齐方式]]。
+%% layout
+%% {
+%%   "height": 866,
+%%   "caption": "规则、写入与 I/O 的边界",
+%%   "zones": [
+%%     [24,96,912,198,"DSH 服务端",""],
+%%     [24,318,912,412,"业务内核 · kernel/src","kernel"],
+%%     [24,752,912,90,"工作区存储","store"]
+%%   ],
+%%   "nodes": {
+%%     "TOOLS": [234,130,204,52],
+%%     "ROUTES": [522,130,204,52],
+%%     "WIRE": [348,224,264,54],
+%%     "CAT": [348,342,264,54,"kernel"],
+%%     "MODELS": [348,432,264,58,"kernel"],
+%%     "CMD": [56,558,248,58,"kernel"],
+%%     "QRY": [356,558,248,58,"kernel"],
+%%     "PORT": [656,558,248,58,"port"],
+%%     "OPS": [56,652,248,58,"kernel"],
+%%     "FS": [656,768,248,58,"store"]
+%%   },
+%%   "routes": {
+%%     "TOOLS>WIRE": [[[336,182],[336,201],[420,201],[420,224]]],
+%%     "ROUTES>WIRE": [[[624,182],[624,201],[540,201],[540,224]]],
+%%     "WIRE>CAT": [[[480,278],[480,342]],[494,311,"start"]],
+%%     "CAT>MODELS": [[[480,396],[480,432]],[494,419,"start"]],
+%%     "MODELS>CMD": [[[398,490],[398,518],[180,518],[180,558]],[289,507]],
+%%     "CMD>OPS": [[[180,616],[180,652]],[194,640,"start"]],
+%%     "CAT>QRY": [[[604,396],[632,414],[632,536],[544,536],[544,558]],[588,552]],
+%%     "QRY>PORT": [[[604,590],[656,590]],[632,612]],
+%%     "MODELS>PORT": [[[562,490],[562,518],[780,518],[780,558]],[671,507]],
+%%     "PORT>FS": [[[780,616],[780,768]],[794,697,"start"]]
+%%   }
+%% }
+%% /layout

@@ -1,0 +1,16 @@
+{
+  "name": "cognition-tree",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Converge 认知树产品工作区与文档制图工具",
+  "scripts": {
+    "diagrams": "node scripts/render-diagrams.mjs"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "10.9.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

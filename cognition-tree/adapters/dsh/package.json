@@ -1,0 +1,51 @@
+{
+  "name": "dsh-cognition-tree",
+  "version": "0.4.9",
+  "private": true,
+  "license": "BSD-3-Clause",
+  "type": "module",
+  "description": "DSH 认知树插件：工作区 SQLite、可信工具与共享阅读界面",
+  "engines": {
+    "node": ">=24",
+    "dsh": "0.2.2-rc.1"
+  },
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "@cognition-tree/kernel": "workspace:*",
+    "@cognition-tree/ui": "workspace:*",
+    "@types/node": "26.6.6",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "rolldown": "1.2.19",
+    "typescript": "7.0.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
+  }
+}
