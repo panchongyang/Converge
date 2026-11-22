@@ -1,13 +1,20 @@
 {
   "name": "dsh-cognition-tree",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "private": true,
   "license": "BSD-3-Clause",
   "type": "module",
   "description": "DSH 认知树插件：工作区 SQLite、可信工具与共享阅读界面",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/panchongyang/Converge.git",
+    "directory": "cognition-tree/adapters/dsh"
+  },
+  "homepage": "https://github.com/panchongyang/Converge#readme",
+  "bugs": { "url": "https://github.com/panchongyang/Converge/issues" },
   "engines": {
     "node": ">=24",
-    "dsh": "0.2.2-rc.1"
+    "dsh": "0.2.2-rc.1 || 0.2.2-rc.2 || 0.2.2-rc.3 || 0.2.2-rc.4 || 0.2.2-rc.5"
   },
   "main": "./lib/index.js",
   "exports": {

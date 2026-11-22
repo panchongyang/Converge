@@ -66,7 +66,7 @@ AI 已经能读到越来越长的历史，但读过历史不等于理解历史�
 | --- | --- |
 | 研究 | 六份问题记录、文献调研（20 篇）、两轮小规模实验、真实项目决策事件整理 |
 | 认知树内核与共享界面 | MVP 已实现，有单元测试 |
-| DSH 插件 | 第一个产品入口，数据保存在工作区 `.converge/`；已完成隔离环境构建与测试，从 DSH 插件目录安装尚未验收 |
+| DSH 插件 | 第一个产品入口，已在 npm 发布并验证按包名安装；数据保存在工作区 `.converge/`。不依赖 DSH 官方发现页上架 |
 | 独立网页 | 用于体验与界面验收，数据仅存于浏览器本地 |
 | MCP | 未实现 |
 
@@ -74,7 +74,19 @@ AI 已经能读到越来越长的历史，但读过历史不等于理解历史�
 
 ## 快速开始
 
-环境要求：Node.js 24、pnpm 12。
+### 安装 DSH 插件
+
+```bash
+dsh plugin --profile web add dsh-cognition-tree
+```
+
+将 `web` 换成你实际使用的 Web profile。安装后启动或重启该 profile，刷新页面，在侧栏打开「认知树」。不需要克隆源码或加入 DSH 插件目录。安装指定版本可在包名后追加版本号，例如 `dsh-cognition-tree@0.4.9`。
+
+请查看 [npm 对应版本](https://www.npmjs.com/package/dsh-cognition-tree)和[插件兼容性与安装说明](cognition-tree/adapters/dsh/README.md)。已发布的 `0.4.9` 仅声明支持 DSH `0.2.2-rc.1`。
+
+### 从源码运行
+
+开发和独立网页体验需要 Node.js 24、pnpm 12。
 
 ```bash
 git clone https://github.com/panchongyang/Converge.git
@@ -90,7 +102,7 @@ pnpm --dir adapters/browser dev    # http://127.0.0.1:5317
 
 打开后点击「导入样例 T1」，可以查看示例树，例如 T1.3.1"纯树"为什么被剪除。
 
-**DSH 插件**（从源码构建，适配 DSH 0.2.2-rc.1）：
+**DSH 插件**（开发者从源码构建，普通用户无需执行）：
 
 ```bash
 pnpm --dir adapters/dsh run build  # 输出到仓库根目录 .local-work/dsh-plugin/
