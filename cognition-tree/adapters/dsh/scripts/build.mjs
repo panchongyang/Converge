@@ -55,8 +55,10 @@ async function client() {
 
 if (part !== 'client') await server();
 if (part !== 'server') await client();
-const { name, version, description, license, type, engines, main, exports, dsh } = manifest;
-await writeFile(join(target, 'package.json'), JSON.stringify({ name, version, description, license, type, engines, main, exports, dsh }, null, 2) + '\n');
+const { name, version, description, license, type, engines, main, exports, dsh, repository, homepage, bugs } = manifest;
+await writeFile(join(target, 'package.json'), JSON.stringify({ name, version, description, license, type, engines, main, exports, dsh, repository, homepage, bugs }, null, 2) + '\n');
+// 包页使用可以独立阅读的安装说明，不复制源码仓的相对导航。
+await copyFile(join(root, 'npm-README.md'), join(target, 'README.md'));
 await copyFile(join(root, 'cordis.patch.yml'), join(target, 'cordis.patch.yml'));
 await copyFile(new URL('../../../../LICENSE', import.meta.url), join(target, 'LICENSE'));
 console.log(`已构建 ${part}：${target}；未安装至 DSH。`);

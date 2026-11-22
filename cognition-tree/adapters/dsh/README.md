@@ -2,9 +2,28 @@
 
 这个适配器让 DSH 入口调用正式内核，把认知树保存在当前会话所属工作区的 `.converge/`。**独立网页不调用这个后端；已有浏览器测试数据不会自动迁移。** 插件源码、隔离构建与当前 DSH profile 是三个不同的东西。
 
-## 构建与验证（不安装）
+## 使用 DSH 安装
 
-支持的本机组合为 Node 24、pnpm 12、DSH 0.2.2-rc.1。使用 Node 自带 `node:sqlite`，不需要另外启动数据库服务。请先按[快速开始](<../../../README.md#快速开始>)安装 workspace 依赖，再在 `cognition-tree/` 目录运行：
+在已安装 DSH 的机器上运行：
+
+```bash
+dsh plugin --profile web add dsh-cognition-tree
+```
+
+`web` 替换为你实际使用的 Web profile 名称。安装后按你的方式启动或重启该 profile，刷新页面，在侧栏打开「认知树」。无需克隆仓库、手改配置、构建源码或加入插件目录。[npm 0.4.9](https://www.npmjs.com/package/dsh-cognition-tree/v/0.4.9)声明兼容 DSH `0.2.2-rc.1`；其他 npm 版本以对应包的 `engines.dsh` 为准。插件需要 Node.js 24，并遵守 DSH 宿主自身的 Node 要求。
+
+## 兼容性
+
+| 插件版本 | DSH 版本 | 验证范围 |
+| --- | --- | --- |
+| `0.4.9`（已发布） | `0.2.2-rc.1` | Windows：隔离环境按 npm 包名安装并装配 |
+| `0.4.10`（本地候选，未发布） | `0.2.2-rc.1`、`rc.2`、`rc.3`、`rc.4`、`rc.5` | Windows、Node.js `24.22.2`：逐版通过原生安装、Web 配置合成、真实 SDK 工具与路由、工作线程和持久化联测 |
+
+[包声明](package.json)只列实际验证的 DSH 版本，不自动包含后续 RC 或正式版。兼容矩阵没有执行浏览器交互或真实模型调用，也不代表其他操作系统已验证。
+
+## 从源码构建与验证（不安装）
+
+使用 Node 自带的 `node:sqlite`，不需要额外的数据库服务。请先按[从源码运行](<../../../README.md#从源码运行>)安装 workspace 依赖，再在 `cognition-tree/` 目录运行：
 
 ```powershell
 pnpm --dir adapters/dsh run typecheck
@@ -13,7 +32,7 @@ pnpm --dir adapters/dsh run build            # 生成仓库根的 .local-work/ds
 node adapters/dsh/scripts/check-package.mjs # 检查打包后的入口以及宿主加载器协议
 ```
 
-可选的真实 SDK 隔离检查需要显式提供已有 DSH 安装根（包含 `node_modules/`），如 `node adapters/dsh/scripts/check-host.mjs --sdk-root "<DSH 安装根>"`；单测中的 SDK 专项使用 `DSH_SDK_TEST_ROOT`，未设置时明确跳过，不代替核心测试。公开 npm 安装待包实际发布后才可用。
+可选的真实 SDK 隔离检查需要显式提供已有 DSH 安装根（包含 `node_modules/`），如 `node adapters/dsh/scripts/check-host.mjs --sdk-root "<DSH 安装根>"`；单测中的 SDK 专项使用 `DSH_SDK_TEST_ROOT`，未设置时明确跳过，不代替核心测试。
 
 从仓库根 `.local-work/dsh-plugin/` 可以查看完整待安装包：服务端入口、数据库工作线程、客户端模块、manifest 和 Cordis patch。`scripts/` 的检查不需要正在使用的 DSH 登录令牌，不访问它的 3080 服务，也不把认知数据写到真实工作区。
 
