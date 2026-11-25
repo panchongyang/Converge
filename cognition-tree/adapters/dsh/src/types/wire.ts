@@ -1,7 +1,7 @@
 /**
  * 服务端线协议。客户端只依赖此处的常量/类型，不加载宿主或 worker。
  * 人侧：Connection 的 signed-cookie + Host/Origin + owner 检查在 exact Fetch 路由前完成。
- * AI：七个具名工具固定 ai；仅人可确认，DSH 的人/AI 入口都不开放手稿导入。身份不是请求参数。
+ * AI：具名工具固定 ai；单节点点查和确认只走人侧路由，两种入口都不开放手稿导入。身份不是请求参数。
  */
 import type { OpInput, OpName, OpOutput } from '@cognition-tree/kernel/catalog/contracts';
 import type { Revision } from '@cognition-tree/kernel/types';
@@ -22,14 +22,13 @@ export const AI_TOOLS = {
   addBranch: 'cognition_tree_add_branch',
   decideNode: 'cognition_tree_decide_node',
   readView: 'cognition_tree_read_view',
-  readNode: 'cognition_tree_read_node',
   readHistory: 'cognition_tree_read_history',
   readUnconfirmed: 'cognition_tree_read_unconfirmed',
 } as const;
 export type AiOp = keyof typeof AI_TOOLS;
 
-/** DSH 只开放七项日常意图与人确认；内核保留的自举操作不属于此宿主协议。 */
-export type UiOp = AiOp | 'confirm';
+/** 人侧路由在 AI 工具的意图之外，保留单节点点查和确认；两侧都不开放自举。 */
+export type UiOp = AiOp | 'readNode' | 'confirm';
 
 /** sessionId 只是宿主会话定位符；工作区必须由其可信 header 经宿主 registry 解析。 */
 export type UiCall = { [K in UiOp]: { sessionId: string; op: K; input: OpInput[K] } }[UiOp];

@@ -1,7 +1,7 @@
 /** 仅校验传输形状和身份边界；正文、树形、决定与查询预算仍由唯一的内核校验。 */
 import type { OpInput } from '@cognition-tree/kernel/catalog/contracts';
 import { CognitionError } from '@cognition-tree/kernel/types';
-import type { UiCall, UiOp } from '../../types/wire';
+import type { AiOp, UiCall, UiOp } from '../../types/wire';
 
 /** DSH 的显式入口白名单，不随内核新增操作自动扩大；手稿 bootstrapTree 不在其中。 */
 const FIELDS: Record<UiOp, { required: string[]; optional?: string[] }> = {
@@ -9,7 +9,8 @@ const FIELDS: Record<UiOp, { required: string[]; optional?: string[] }> = {
   addBranch: { required: ['treeId', 'placement', 'draft'] },
   decideNode: { required: ['treeId', 'nodeId', 'decision'] },
   confirm: { required: ['treeId', 'target'] },
-  readView: { required: ['treeId', 'focus', 'expand', 'budget', 'onLimit'], optional: ['cursor'] },
+  // includeDetails 仅作为 readView 的可选布尔透传；详细模式的投影、计费与续读由内核守。
+  readView: { required: ['treeId', 'focus', 'expand', 'budget', 'onLimit'], optional: ['cursor', 'includeDetails'] },
   readNode: { required: ['treeId', 'nodeId'] },
   readHistory: { required: ['treeId', 'limit'], optional: ['nodeId', 'after'] },
   readUnconfirmed: { required: ['treeId', 'by', 'limit'], optional: ['after'] },
@@ -55,11 +56,12 @@ export const AI_READ_VIEW_BUDGET = { maxScans: 400, maxNodes: 24, maxBytes: 4000
 /**
  * AI 工具入口：readView 允许整项省略 budget，此时补一组显式三项交给内核。
  * 只要 budget 键存在（包括 null、缺项、非法值）就不改写；字段、身份与工作区保护仍由 parseInput 负责。
+ * includeDetails 原样透传，不补缺省：省略与 false 都由内核按同一默认解释。
  * @param op 已枚举的 AI 意图。
  * @param input 模型给出的原始参数。
  * @returns 可交给 runtime/kernel 的具名参数。
  */
-export function parseAiInput<K extends UiOp>(op: K, input: unknown): OpInput[K] {
+export function parseAiInput<K extends AiOp>(op: K, input: unknown): OpInput[K] {
   if (op === 'readView' && record(input) && !Object.hasOwn(input, 'budget')) {
     return parseInput(op, { ...input, budget: { ...AI_READ_VIEW_BUDGET } });
   }

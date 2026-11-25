@@ -44,7 +44,12 @@ export function createKernel(deps: { store: TreeStore; clock: Clock; aiViewCost?
     readHistory: { access: 'both', run: (_, p) => read.readHistory(p.treeId, p) },
     readUnconfirmed: { access: 'both', run: (_, p) => read.readUnconfirmed(p.treeId, p) },
     // AI 已在请求中给出零跳数，不必把同一个未查询范围贴到每个命中；人侧保留节点上的入口提示。
-    readView: { access: 'both', run: (actor, p) => read.readView(p.treeId, p.focus, p.expand, p.budget, p.onLimit, p.cursor, actor === 'ai') },
+    readView: {
+      access: 'both',
+      run: (actor, p) => read.readView(
+        p.treeId, p.focus, p.expand, p.budget, p.onLimit, p.cursor, actor === 'ai', p.includeDetails,
+      ),
+    },
   };
   return {
     async dispatch<K extends OpName>(actor: DailyActor, op: K, input: OpInput[K]): Promise<OpOutput[K]> {

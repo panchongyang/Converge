@@ -146,17 +146,17 @@ const PARAMETERS: Record<AiOp, HostTool['parameters']> = {
       afterJumpDepth: depthField('每个引用落点再向下展开的层数，单位边数；0 只含落点自身；与 subtreeDepth 独立生效。'),
     }, ['subtreeDepth', 'jumpHops', 'direction', 'jumpFrom', 'afterJumpDepth'], '展开范围，五项都必传；范围决定本次要覆盖到哪里，不等于预算。'),
     budget: object({
-      maxScans: integerField('计数单位：次。本页最多实际检查的邻接行与查找次数，含空查、向前探一条和补父链。'),
+      maxScans: integerField('计数单位：次。本页最多实际检查的邻接行与查找次数，含空查、向前探一条、补父链、详情与当前形成记录的查找。'),
       maxNodes: integerField('计数单位：个。本页最多返回节点数，命中的节点和为连回根补入的父链节点都算。'),
       maxBytes: integerField('计数单位：UTF-8 字节。本页给模型的正文上限，含定位、节点、引用、边界标记和游标。'),
     }, ['maxScans', 'maxNodes', 'maxBytes'], `本页预算。省略整个 budget 时，使用 ${Object.entries(AI_READ_VIEW_BUDGET).map(([key, value]) => `${key}:${value}`).join('、')}。显式传入时三项都必传且须为正安全整数；null、缺项和非法值不会套用默认。`),
     onLimit: enumeration('超限策略：fold 在能返回连通页并推进时给部分结果与 cursor；exact 要求一次读完指定范围，超限报 rangeTooLarge。', 'fold', 'exact'),
-    cursor: stringField('上一页原样返回的续读游标；首次读取省略。续读必须保持同一棵树、同一焦点、同一 expand 和同一 onLimit（同范围同策略），预算可按本页重新给出。'),
+    cursor: stringField('上一页原样返回的续读游标；首次读取省略。续读必须保持同一棵树、同一焦点、同一 expand、同一 onLimit 和同一 includeDetails（同范围同策略同详情模式），预算可按本页重新给出。'),
+    includeDetails: {
+      type: 'boolean',
+      description: '为 true 时返回完整 JSON：同一 TreeView 的每个节点（含为连通父链补入的 link）多一个 detail（NodeDetail：正文、状态、确认、来历与当前形成记录全文），本页预算按该 JSON 的 UTF-8 字节计；省略或 false 时返回 CTV2 紧凑文本（超 128 节点或 256 引用仍退回 JSON）。',
+    },
   }, ['treeId', 'focus', 'expand', 'onLimit'], '按明确范围和预算读取当前工作区认知树的连通局部视图；保留真实父链与引用方向。续读使用原查询和cursor。'),
-  readNode: object({
-    treeId,
-    nodeId,
-  }, ['treeId', 'nodeId'], '读取当前工作区指定判断的正文、状态、确认标记和当前形成记录。'),
   readHistory: object({
     treeId,
     nodeId: stringField('只看该节点的修订历史；省略则读取整棵树的历史。'),
@@ -178,11 +178,18 @@ const DESCRIPTIONS: Record<AiOp, string> = {
   createTree: '在当前工作区以指定treeId和根问题创建认知树，返回树ID；仅含一个未确认根，不导入手稿或批量节点。',
   addBranch: '在当前工作区的认知树中新增分支、补充、勘误或替代候选；提交生效但不代表人确认。不覆盖原文。',
   decideNode: '在当前工作区的认知树中剪除、复活、切换留/未决或执行替代；必须显式给出理由。变更生效但不代表人确认。',
-  readView: `按明确范围和预算读取当前工作区认知树的连通局部视图；保留真实父链与引用方向。续读使用原查询和cursor。\n${AI_READ_VIEW_GUIDE}`,
-  readNode: '读取当前工作区指定判断的正文、状态、确认标记和当前形成记录。',
+  readView: `按明确范围和预算读取当前工作区认知树的连通局部视图；保留真实父链与引用方向。includeDetails=true 时返回带节点详情的完整 JSON。续读使用原查询和cursor。\n${AI_READ_VIEW_GUIDE}`,
   readHistory: '按页读取当前工作区的树或指定节点修订历史；limit必传，after来自前页。',
   readUnconfirmed: '按执行者种类分页列出当前工作区的未确认目标；AI只能读取，不能代替人确认。',
 };
+
+/**
+ * 本页响应是否带节点详情；只看回包，防止参数与回包不一致时把 detail 压缩掉。
+ * @param value 内核返回的本页视图对象。
+ */
+function hasNodeDetail(value: Record<string, unknown>): boolean {
+  return Array.isArray(value.nodes) && value.nodes.some(node => record(node) && Object.hasOwn(node, 'detail'));
+}
 
 /**
  * 注册完整的一组工具；中途碰撞会回滚自己已注册的工具，不移除其它插件的同名项。
@@ -198,9 +205,15 @@ export function registerTools(ctx: HostContext, runtime: HostRuntime): () => voi
         name: AI_TOOLS[op], description: DESCRIPTIONS[op], parameters: PARAMETERS[op],
         output: {
           schema: {},
-          render: (_args, value) => [{ type: 'text', text: op === 'readView' && record(value)
-            && Array.isArray(value.nodes) && Array.isArray(value.refs) && Array.isArray(value.boundaries)
-            ? renderAiReadView(value as unknown as TreeView) : JSON.stringify(value) }],
+          render: (args, value) => {
+            if (op !== 'readView' || !record(value) || !Array.isArray(value.nodes)
+              || !Array.isArray(value.refs) || !Array.isArray(value.boundaries)) {
+              return [{ type: 'text', text: JSON.stringify(value) }];
+            }
+            // 参数与回包任一表明本页带详情都直出原样 JSON；CTV2 会丢掉 detail 字段。
+            const detailed = (record(args) && args.includeDetails === true) || hasNodeDetail(value);
+            return [{ type: 'text', text: renderAiReadView(value as unknown as TreeView, detailed) }];
+          },
           ...(op === 'addBranch' || op === 'decideNode' ? {
             presentationMeta: (args: unknown, value: unknown) => record(args) && typeof args.treeId === 'string' && typeof value === 'string'
               ? { kind: 'cognition-tree', op, treeId: args.treeId, nodeId: value } : undefined,
