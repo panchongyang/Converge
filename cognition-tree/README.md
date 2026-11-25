@@ -7,6 +7,7 @@
 | 看产品边界、一次提议怎样到达确认 | [总架构与前后端图](<docs/ARCHITECTURE.md>) |
 | 理解变更、确认、参数化树视图和单树存储 | [内核接口单](<docs/design/kernel-interfaces.md>) · [实现设计与运行边界](<docs/design/implementation.md>) |
 | 找能把树写进工作区的 DSH 插件 | [接入与权限设计](<docs/design/dsh-adapter.md>) · [构建与隔离验证](<adapters/dsh/README.md>) |
+| 跑 CI 检查、找候选包或核对公开范围 | [CI 流程](<docs/CI.md>) |
 | 看视觉与交互设计、使用网页 | [UX 原型设计稿](<docs/design/ux.md>) · 启动见下文[独立浏览器](#独立浏览器) |
 | 找代码职责或判断新文件该放哪 | [文件结构图与放置判据](<docs/STRUCTURE.md>) |
 | 区分哪些是人拍板、哪些不能由 AI 推定 | [人的决定](<docs/PRINCIPLES.md>) · [待决问题](<docs/open-questions.md>) · [术语](<docs/glossary.md>) |
