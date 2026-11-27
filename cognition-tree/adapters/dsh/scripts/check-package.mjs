@@ -21,7 +21,7 @@ assert.equal(packagedLicense, await readFile(new URL('../../../../LICENSE', impo
 const skillFile = 'skills/incremental-formalization/SKILL.md';
 const skillText = await readFile(new URL(skillFile, stage), 'utf8');
 assert.equal(skillText, await readFile(new URL(`../../../../.dsh/${skillFile}`, import.meta.url), 'utf8'));
-assert.match(skillText, /^---\nname: incremental-formalization\n/);
+assert.match(skillText, /^---\r?\nname: incremental-formalization\r?\n/);
 const patch = await readFile(new URL(manifest.dsh.bundle.patch, stage), 'utf8');
 assert.ok(patch.includes(`name: ${manifest.name}`));
 const host = await import(new URL(manifest.exports['.'], stage));
