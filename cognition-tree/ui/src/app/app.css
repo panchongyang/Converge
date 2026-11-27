@@ -117,7 +117,8 @@
   font-size: var(--ct-fs-ui);
   white-space: nowrap;
 }
-.ct-top__find:hover {
+.ct-top__find:hover,
+.ct-top__find.is-on {
   color: var(--ct-ink-1);
 }
 .ct-top__watch {
@@ -302,4 +303,29 @@
   .ct-top__right {
     gap: var(--ct-s4);
   }
+}
+
+/* —— 已归档的分支：树视图里的一条就地展开区，不遮挡树与阅读栏 —— */
+.ct-archivebar {
+  position: relative;
+  flex: none;
+  max-height: 38%;
+  overflow: auto;
+  padding: var(--ct-s4) var(--ct-s6);
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+  background: var(--ct-page);
+}
+
+.ct-archivebar .ct-arc {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding-right: 56px;
+}
+
+.ct-archivebar__close {
+  position: absolute;
+  top: var(--ct-s4);
+  right: var(--ct-s6);
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
 }

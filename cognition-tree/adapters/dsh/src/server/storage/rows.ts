@@ -74,10 +74,11 @@ export function nodeRow(row: SqlNodeRow): NodeRow {
  * 按 ID 取一条完整节点，附正文及当下的剪除字段。
  * @param connection 当前事务或快照连接
  * @param id 要查的节点 ID
- * @returns 节点，不存在时为 null
+ * @param sql 当前连接适用的固定读语句；写命令先检查可见节点，再用原始元数据验证规则
+ * @returns 节点，不存在或不可见时为 null
  */
-export function readNode(connection: Connection, id: string): CognitionNode | null {
-  const row = connection.get<SqlNode>(SQL.node, id);
+export function readNode(connection: Connection, id: string, sql: string = SQL.node): CognitionNode | null {
+  const row = connection.get<SqlNode>(sql, id);
   if (row === undefined) return null;
   const { title, ...base } = nodeRow(row);
   return {
@@ -92,10 +93,11 @@ export function readNode(connection: Connection, id: string): CognitionNode | nu
  * 按 ID 取一条节点轻行，不访问或解码正文。
  * @param connection 当前快照连接
  * @param id 要查的节点 ID
- * @returns 轻行，不存在时为 null
+ * @param sql 当前连接适用的固定读语句
+ * @returns 轻行，不存在或不可见时为 null
  */
-export function readNodeRow(connection: Connection, id: string): NodeRow | null {
-  const row = connection.get<SqlNodeRow>(SQL.nodeRow, id);
+export function readNodeRow(connection: Connection, id: string, sql: string = SQL.nodeRow): NodeRow | null {
+  const row = connection.get<SqlNodeRow>(sql, id);
   return row === undefined ? null : nodeRow(row);
 }
 
@@ -129,10 +131,11 @@ export function revisionRow(row: SqlRevision): Revision {
  * 按 ID 取已追加的修订全文。
  * @param connection 当前事务或快照连接
  * @param id 要查的修订 ID
- * @returns 修订，不存在时为 null
+ * @param sql 当前连接适用的固定读语句
+ * @returns 修订，不存在或不可见时为 null
  */
-export function readRevision(connection: Connection, id: string): Revision | null {
-  const row = connection.get<SqlRevision>(SQL.revision, id);
+export function readRevision(connection: Connection, id: string, sql: string = SQL.revision): Revision | null {
+  const row = connection.get<SqlRevision>(sql, id);
   return row === undefined ? null : revisionRow(row);
 }
 

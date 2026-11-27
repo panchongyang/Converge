@@ -1,7 +1,7 @@
 /** 仅校验传输形状和身份边界；正文、树形、决定与查询预算仍由唯一的内核校验。 */
 import type { OpInput } from '@cognition-tree/kernel/catalog/contracts';
 import { CognitionError } from '@cognition-tree/kernel/types';
-import type { AiOp, UiCall, UiOp } from '../../types/wire';
+import type { AiOp, ArchiveAction, UiCall, UiOp } from '../../types/wire';
 
 /** DSH 的显式入口白名单，不随内核新增操作自动扩大；手稿 bootstrapTree 不在其中。 */
 const FIELDS: Record<UiOp, { required: string[]; optional?: string[] }> = {
@@ -74,4 +74,26 @@ export function parseUiCall(value: unknown): UiCall {
   const sessionId = requireSessionId(value.sessionId);
   if (!isOp(value.op)) throw new CognitionError('invalid', '未知认知树操作。');
   return { sessionId, op: value.op, input: parseInput(value.op, value.input) } as UiCall;
+}
+
+/** 归档定位符按原样传入存储；路径及会话身份仍只能由宿主解析。@param value 原始定位符。 */
+function archiveId(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) throw new CognitionError('invalid', '归档需要有效的树或节点 ID。');
+  return value;
+}
+
+/** 归档专用人侧白名单，不把它加到普通 call 或 AI 参数中。@param value 请求 JSON。 */
+export function parseArchiveCall(value: unknown): { sessionId: string; operation: ArchiveAction } {
+  if (record(value) && value.action === 'list') {
+    exactObject(value, ['sessionId', 'action'], ['treeId']);
+    return { sessionId: requireSessionId(value.sessionId), operation: {
+      action: 'list', ...(Object.hasOwn(value, 'treeId') ? { treeId: archiveId(value.treeId) } : {}),
+    } };
+  }
+  exactObject(value, ['sessionId', 'action', 'treeId'], ['nodeId']);
+  if (value.action !== 'archive' && value.action !== 'restore') throw new CognitionError('invalid', '未知归档操作。');
+  return { sessionId: requireSessionId(value.sessionId), operation: {
+    action: value.action, treeId: archiveId(value.treeId),
+    ...(Object.hasOwn(value, 'nodeId') ? { nodeId: archiveId(value.nodeId) } : {}),
+  } };
 }

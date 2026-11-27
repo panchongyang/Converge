@@ -10,7 +10,7 @@
  * 阅读栏的宽度都由 tokens.css 的令牌按窗口宽度算出；阅读栏、搜索与时间线都在页面内原地展开。
  * 人的决定都在阅读栏原地发生；本组件只把提交结果交给阅读栏显示，不预先改动缓存。
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NodeId } from '../types/kernel';
 import type { AppProps, DockContext, TreeChange } from '../types/ports';
 import { BUDGETS, DEFAULT_FOCUS_EXPAND, useCognition } from '../models/useCognition';
@@ -29,6 +29,8 @@ import { Reader, type WriterState, type WriterType } from '../modules/inspector/
 import { SearchPalette } from '../modules/search/SearchPalette';
 import { ViewBar, type ReadMode } from '../modules/view/ViewPanel';
 import { TreeEntry } from '../modules/tree/TreeEntry';
+import { ArchiveList } from '../modules/archive/ArchiveList';
+import { ARCHIVE_COPY, archiveLanding, isInSubtree } from '../modules/archive/model';
 import { TREE_ENTRY_COPY, TREE_GENESIS_COPY, missingTreeTitle } from '../modules/tree/model';
 import '../styles/tokens.css';
 import '../styles/base.css';
@@ -45,10 +47,10 @@ type Mode = ReadMode;
  * @param props 见 AppProps：树 ID、端口、可选自举与开发坞
  */
 export function App(props: AppProps) {
-  const { treeId, client, bridge, bootstrap, trees, onBackToTrees, renderDock } = props;
+  const { treeId, client, bridge, bootstrap, trees, onBackToTrees, archive, renderDock } = props;
   const reduced = useReducedMotion();
   const appElement = useRef<HTMLDivElement>(null);
-  const { selectedId, select: selectRaw, back, canBack, previousId, reveal } = useSelection(props.initialNodeId);
+  const { selectedId, select: selectRaw, back, clearBack, canBack, previousId, reveal } = useSelection(props.initialNodeId);
   const [arrivals, setArrivals] = useState<Map<NodeId, number>>(() => new Map());
 
   /** AI 新提议到达时记下时刻，供「待看」排序；读回之后再记，节点已在缓存里。 */
@@ -59,13 +61,25 @@ export function App(props: AppProps) {
       setArrivals((m) => new Map(m).set(id, Date.now()));
     }
   }, []);
-  const cog = useCognition(client, treeId, onChange);
-  const { setSpec, expandAt, ensureNeighborhood, reload, bootstrap: bootstrapTree, pulses } = cog;
+  // 有归档端口的 App 才把重连 ready 当作可见性可能变化；独立浏览器保持原样。
+  const cog = useCognition(client, treeId, onChange, !!archive);
+  const {
+    setSpec,
+    expandAt,
+    ensureNeighborhood,
+    reload,
+    bootstrap: bootstrapTree,
+    pulses,
+    resetVisibility,
+    visibilityEpoch,
+  } = cog;
   const human = useHumanWrite(client, treeId);
   const s = cog.state;
   const spec = cog.spec;
   const rootId = s.rootId;
   const proposalPage = usePending(client, treeId, s.stamp, s.status === 'ready');
+  // 回退项可能已归档；不要在新的可见范围中显示旧的跳转路径。
+  useEffect(() => { if (visibilityEpoch > 0) clearBack(); }, [visibilityEpoch, clearBack]);
 
   const [mode, setMode] = useState<Mode>('combo');
   const [dockOpen, setDockOpen] = useState(false);
@@ -99,6 +113,10 @@ export function App(props: AppProps) {
   const [collapseSignal, setCollapseSignal] = useState(0);
   const [dismissedError, setDismissedError] = useState<UiError | null>(null);
   const [boot, setBoot] = useState<{ busy: boolean; error: UiError | null }>({ busy: false, error: null });
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const [archiveRefresh, setArchiveRefresh] = useState(0);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [archiveError, setArchiveError] = useState<UiError | null>(null);
   const drafts = useRef(new Map<string, Record<string, string>>());
   /** 打开视野参数句前的视野：Esc 时还原（原生下拉逐项即时生效，Enter 无需再应用）。 */
   const specAtOpen = useRef<typeof spec | null>(null);
@@ -213,6 +231,49 @@ export function App(props: AppProps) {
       setBoot({ busy: false, error: toUiError(e) });
     }
   }, [bootstrap, bootstrapTree]);
+
+  // 换一个判断时清掉上一次的归档失败；同一判断原地重试仍能看到原因。
+  useEffect(() => {
+    setArchiveError(null);
+  }, [selectedId]);
+
+  /** 归档当前判断；根表示整树。成功后分支回到可见祖先，整树返回目录。 */
+  const archiveSelected = useCallback(async () => {
+    if (!archive || archiveBusy || !rootId) return;
+    const id = selectedId ?? rootId;
+    setArchiveError(null);
+    setArchiveBusy(true);
+    try {
+      if (id === rootId) {
+        // 根即整棵树：归档后面板留在目录，不显示已被隐藏的树。
+        if (!onBackToTrees) {
+          setArchiveError({ code: 'invalid', message: '当前环境没有可返回的目录，整树归档未提交。' });
+          return;
+        }
+        await archive.archive({ treeId });
+        setArchivedOpen(false);
+        onBackToTrees?.();
+        return;
+      }
+      await archive.archive({ treeId, nodeId: id });
+      // 落点按归档前的可见集合计算；随后丢弃缓存，不能沿用已归档节点的标题与引用。
+      const landing = archiveLanding(id, s.known, s.visible, rootId);
+      // 归档会改变可见集合；列表重读，新增的归档项才出现。
+      setArchiveRefresh((n) => n + 1);
+      resetVisibility();
+      // 视野若还停在被归档的子树里，跟着落到祖先；focusOn 自身会按新视野重读。
+      if (spec.kind === 'focus' && isInSubtree(spec.focusId, id, s.known)) {
+        focusOn(landing);
+      } else {
+        select(landing, 'pan');
+        reload();
+      }
+    } catch (e) {
+      setArchiveError(toUiError(e));
+    } finally {
+      setArchiveBusy(false);
+    }
+  }, [archive, archiveBusy, rootId, selectedId, treeId, onBackToTrees, s.known, s.visible, select, reload, spec, focusOn, resetVisibility]);
 
   const toggleTimeline = useCallback(() => {
     closeWriter();
@@ -390,6 +451,17 @@ export function App(props: AppProps) {
                 待看 <span key={watchLabel} className="ct-top__watchnum">{watchLabel}</span>
               </button>
             )}
+            {archive && (
+              <button
+                type="button"
+                className={'ct-top__find' + (archivedOpen ? ' is-on' : '')}
+                onClick={() => setArchivedOpen((open) => !open)}
+                title={ARCHIVE_COPY.archivedBranchesDesc}
+                aria-expanded={archivedOpen}
+              >
+                {ARCHIVE_COPY.archivedBranches}
+              </button>
+            )}
             <button type="button" className="ct-top__find" onClick={openSearch} title="查找判断（Ctrl K）">
               查找 <span className="ct-kbd">Ctrl K</span>
             </button>
@@ -407,6 +479,23 @@ export function App(props: AppProps) {
           </div>
         )}
       </header>
+
+      {archive && archivedOpen && (
+        <section className="ct-archivebar" aria-label={ARCHIVE_COPY.archivedBranchesTitle}>
+          <ArchiveList
+            archive={archive}
+            treeId={treeId}
+            refreshKey={archiveRefresh}
+            onRestored={() => {
+              resetVisibility();
+              reload();
+            }}
+          />
+          <button type="button" className="ct-textbtn ct-archivebar__close" onClick={() => setArchivedOpen(false)}>
+            {ARCHIVE_COPY.close}
+          </button>
+        </section>
+      )}
 
       <div className={'ct-main is-' + mode}>
         {!dataReady && (
@@ -539,6 +628,7 @@ export function App(props: AppProps) {
               />
             </main>
             <Reader
+              key={visibilityEpoch}
               client={client}
               treeId={treeId}
               stamp={s.stamp}
@@ -567,6 +657,11 @@ export function App(props: AppProps) {
               onCloseTimeline={() => setTimelineOpen(false)}
               collapseSignal={collapseSignal}
               onExpandedChange={setReaderExpanded}
+              archiveAction={
+                archive
+                  ? { busy: archiveBusy, error: archiveError, onArchive: () => void archiveSelected() }
+                  : undefined
+              }
             />
           </>
         )}

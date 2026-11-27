@@ -1,12 +1,12 @@
 /**
- * 只注册 Connection 认证通道中的三个 exact Fetch 路由，不改 webServer、fallback、RPC 或宿主鉴权。
+ * 只注册 Connection 认证通道中的 exact Fetch 路由，不改 webServer、fallback、RPC 或宿主鉴权。
  * Connection 在调用 fetch 前已检查 Host/Origin、签名凭证与 owner Peer；本层不增授非 owner 权限。
  * 人侧请求固定 human，不接受 actor。宿主认证是受信 UI 边界，不声称能证明物理真人手势。
  */
 import { CognitionError } from '@cognition-tree/kernel/types';
 import type { HostContext } from './abi';
-import { CALL_PATH, MAX_BODY_BYTES, TREES_PATH, WATCH_PATH, type ChangeNotice } from '../../types/wire';
-import { parseUiCall, requireSessionId } from './input';
+import { ARCHIVE_PATH, CALL_PATH, MAX_BODY_BYTES, TREES_PATH, WATCH_PATH, type ChangeNotice } from '../../types/wire';
+import { parseArchiveCall, parseUiCall, requireSessionId } from './input';
 import { boundaryError, HostRuntime, workspaceOf } from './runtime';
 
 /** 用封闭错误码映射 HTTP 状态，未知异常不泄漏堆栈。@param error 插件边界异常。 */
@@ -121,11 +121,11 @@ async function eventStream(runtime: HostRuntime, root: string, sessionId: string
 }
 
 /**
- * 用现有认证通道提供八项白名单人侧操作、提交订阅与工作区只读目录；不包括手稿导入。
- * 中途失败只撤销自身贡献，目录不作为单树意图开放，旧客户端改发 bootstrapTree 也在后台调用前拒绝。
+ * 在现有认证通道提供日常操作、提交订阅、工作区导航与人侧归档管理；不包括手稿导入。
+ * 中途失败只撤销自身贡献，目录和归档均不通过普通 call 路由。
  * @param ctx Connection 注入后的宿主上下文。
  * @param runtime 插件惰性后台。
- * @returns 移除三个 exact 路由并关闭其 SSE 流的异步函数。
+ * @returns 移除登记的 exact 路由并关闭 SSE 流的异步函数。
  */
 export function registerRoutes(ctx: HostContext, runtime: HostRuntime): () => Promise<void> {
   if (!ctx.connection) throw new Error('Connection is unavailable');
@@ -184,6 +184,23 @@ export function registerRoutes(ctx: HostContext, runtime: HostRuntime): () => Pr
           if (stopped) throw new CognitionError('storage', '认知树界面已解绑。');
           runtime.assertActive();
           signal.throwIfAborted();
+          return json({ ok: true, value });
+        } catch (error) { return failure(error); }
+      },
+    }));
+    disposers.push(ctx.connection.fetch.register({
+      path: ARCHIVE_PATH, methods: ['POST'], requestBody: 'streaming',
+      async fetch(request) {
+        try {
+          if (stopped) throw new CognitionError('storage', '认知树界面已解绑。');
+          runtime.assertActive();
+          requireUiSource(request);
+          if (new URL(request.url).search) throw new CognitionError('invalid', '归档请求不接受查询参数。');
+          const signal = AbortSignal.any([request.signal, lifetime.signal]);
+          const { sessionId, operation } = parseArchiveCall(await readJson(request));
+          const root = await workspaceOf(ctx, sessionId, signal);
+          const value = await runtime.archive(root, operation, signal);
+          if (operation.action === 'list') { runtime.assertActive(); signal.throwIfAborted(); }
           return json({ ok: true, value });
         } catch (error) { return failure(error); }
       },

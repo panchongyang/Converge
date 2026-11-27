@@ -9,7 +9,7 @@ import { aiReadViewCost } from '../src/server/ai-view-wire';
 import type { Backend } from '../src/server/backend/index';
 import { installHost, inject, name } from '../src/server/host/index';
 import type { FetchRoute, HostContext, HostTool, JsonSchema, SessionIdentity, ToolExecution } from '../src/server/host/abi';
-import { AI_TOOLS, CALL_PATH, TREES_PATH, WATCH_PATH, type UiOp, type WorkspaceTreeDirectory } from '../src/types/wire';
+import { AI_TOOLS, ARCHIVE_PATH, CALL_PATH, TREES_PATH, WATCH_PATH, type UiOp, type WorkspaceTreeDirectory } from '../src/types/wire';
 import { HostRuntime, workspaceOf } from '../src/server/host/runtime';
 import { containsDataDirectory } from '../src/server/host/file-policy';
 import { join } from 'node:path';
@@ -43,7 +43,7 @@ function fixture(options: { connection?: boolean; failRoute?: string } = {}) {
   ]);
   const listTrees = vi.fn(async (root: string): Promise<WorkspaceTreeDirectory> => directories.get(root)!);
   const backend: Backend = {
-    call: call as Backend['call'], listTrees, close,
+    call: call as Backend['call'], listTrees, archive: async () => null, close,
     process: vi.fn(async (_root, { treeId, action }) => ({
       treeId, processId: action.kind === 'read' ? action.processId : 'a'.repeat(64),
       text: action.kind === 'save' ? action.text : '旧过程材料',
@@ -106,7 +106,7 @@ describe('DSH 插件的可信入口', () => {
     ]);
     expect([...Object.values(AI_TOOLS), 'cognition_tree_process']).toEqual([...f.tools.keys()]);
     expect(AI_TOOLS).not.toHaveProperty('readNode');
-    expect([...f.routes.keys()]).toEqual([CALL_PATH, WATCH_PATH, TREES_PATH]);
+    expect([...f.routes.keys()]).toEqual([CALL_PATH, WATCH_PATH, TREES_PATH, ARCHIVE_PATH]);
     expect(f.factory).not.toHaveBeenCalled();
     await f.dispose();
     expect(f.factory).not.toHaveBeenCalled();
@@ -247,7 +247,7 @@ describe('DSH 插件的可信入口', () => {
     expect(f.routes.size).toBe(0);
     await f.invoke();
     f.connect();
-    expect(f.routes.size).toBe(3);
+    expect(f.routes.size).toBe(4);
     await f.dispose();
   });
 });
@@ -413,7 +413,7 @@ describe('已提交通知和解绑', () => {
     expect(f.routes.size).toBe(0);
     expect((await staleRoute.fetch(f.request('readNode'))).status).toBe(503);
     f.connect();
-    expect(f.routes.size).toBe(3);
+    expect(f.routes.size).toBe(4);
     expect(f.tools.size).toBe(7);
     const staleTool = f.tools.get(AI_TOOLS.readHistory)!;
     const execution = f.exec();

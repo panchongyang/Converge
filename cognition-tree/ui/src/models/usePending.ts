@@ -64,6 +64,7 @@ export function usePending(client: CognitionClient, treeId: TreeId, stamp: numbe
 
   useEffect(() => {
     if (!enabled) {
+      ++seq.current; // 可见性重置后，旧请求不能填回待确认缓存。
       setState({ ...emptyPending(), loading: false, error: null });
       return;
     }

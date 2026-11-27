@@ -10,7 +10,7 @@ import {
   confirmationKey, nodeRow, readNode, readNodeRow, readRevision, refRow, revisionRow,
   type RevisionKey, type SqlRef, type SqlRevision, type TreeMeta,
 } from './rows';
-import { SQL } from './schema';
+import { SQL, VISIBLE_SQL, type ReadSql } from './schema';
 
 interface PendingFormationRow {
   revision_id: RevisionId;
@@ -32,10 +32,11 @@ function pageSize(limit: number): number {
 /**
  * 取得续读锚点在该快照中的键，不取正文。
  * @param db 固定版本的只读连接
+ * @param sql 按该快照可见性选择的游标点查语句
  * @param id 上一页最后一条修订 ID
  */
-function cursorKey(db: Connection, id: RevisionId): RevisionKey {
-  const cursor = db.get<RevisionKey>(SQL.revisionKey, id);
+function cursorKey(db: Connection, sql: string, id: RevisionId): RevisionKey {
+  const cursor = db.get<RevisionKey>(sql, id);
   if (cursor === undefined) throw new CognitionError('invalid', '分页续读的修订在该快照中不存在');
   return cursor;
 }
@@ -54,6 +55,7 @@ function newer(left: PendingFormationRow, right: PendingFormationRow): boolean {
 export class SqliteReadSnapshot implements ReadSnapshot {
   readonly stamp: number;
   readonly rootId: NodeId;
+  private readonly sql: ReadSql;
   private connection: Connection | undefined;
   private release: (() => void) | undefined;
 
@@ -61,10 +63,12 @@ export class SqliteReadSnapshot implements ReadSnapshot {
    * 包装已用树登记固定读版本的连接。
    * @param connection 已 BEGIN 且已读取登记的只读连接
    * @param meta 该读版本的树根与 stamp
+   * @param filter 当前版本有隐藏分支时启用归档可见性过滤
    * @param release 关闭后从 TreeStore 的跟踪集合移除
    */
-  constructor(connection: Connection, meta: TreeMeta, release: () => void) {
+  constructor(connection: Connection, meta: TreeMeta, filter: boolean, release: () => void) {
     this.connection = connection;
+    this.sql = filter ? VISIBLE_SQL : SQL;
     this.release = release;
     this.stamp = meta.stamp;
     this.rootId = meta.root_id;
@@ -85,7 +89,13 @@ export class SqliteReadSnapshot implements ReadSnapshot {
    * @param nodeId 目标节点；此版本未出现时返回 null
    */
   async readNode(nodeId: NodeId): Promise<CognitionNode | null> {
-    return this.read((db) => readNode(db, nodeId));
+    return this.read((db) => readNode(db, nodeId, this.sql.node));
+  }
+
+  /** 点查详情确认控件所需的布尔值，不查或返回隐藏记录。@param nodeId 已读的可见节点，投影中没有形成指针。 */
+  async hasUnprojectedCurrentChange(nodeId: NodeId): Promise<boolean> {
+    return this.read((db) => this.sql === VISIBLE_SQL
+      && db.get('SELECT 1 FROM nodes WHERE id = ? AND change_id IS NOT NULL', nodeId) !== undefined);
   }
 
   /**
@@ -93,7 +103,7 @@ export class SqliteReadSnapshot implements ReadSnapshot {
    * @param nodeId 目标节点；此版本未出现时返回 null
    */
   async readNodeRow(nodeId: NodeId): Promise<NodeRow | null> {
-    return this.read((db) => readNodeRow(db, nodeId));
+    return this.read((db) => readNodeRow(db, nodeId, this.sql.nodeRow));
   }
 
   /**
@@ -101,7 +111,7 @@ export class SqliteReadSnapshot implements ReadSnapshot {
    * @param revisionId 目标修订；此版本未出现时返回 null
    */
   async readRevision(revisionId: RevisionId): Promise<Revision | null> {
-    return this.read((db) => readRevision(db, revisionId));
+    return this.read((db) => readRevision(db, revisionId, this.sql.revision));
   }
 
   /**
@@ -115,8 +125,8 @@ export class SqliteReadSnapshot implements ReadSnapshot {
       const take = pageSize(limit);
       if (take === 0) return [];
       type Row = Parameters<typeof nodeRow>[0];
-      return (after === null ? db.all<Row>(SQL.children[0], parentId, take)
-        : db.all<Row>(SQL.children[1], parentId, idKey(after), take)).map(nodeRow);
+      return (after === null ? db.all<Row>(this.sql.children[0], parentId, take)
+        : db.all<Row>(this.sql.children[1], parentId, idKey(after), take)).map(nodeRow);
     });
   }
 
@@ -127,7 +137,7 @@ export class SqliteReadSnapshot implements ReadSnapshot {
    * @param limit 本批额度
    */
   async listRefsFrom(nodeId: NodeId, after: RefId | null, limit: number): Promise<Ref[]> {
-    return this.listRefs(SQL.refsFrom, nodeId, after, limit);
+    return this.listRefs(this.sql.refsFrom, nodeId, after, limit);
   }
 
   /**
@@ -137,7 +147,7 @@ export class SqliteReadSnapshot implements ReadSnapshot {
    * @param limit 本批额度
    */
   async listRefsTo(nodeId: NodeId, after: RefId | null, limit: number): Promise<Ref[]> {
-    return this.listRefs(SQL.refsTo, nodeId, after, limit);
+    return this.listRefs(this.sql.refsTo, nodeId, after, limit);
   }
 
   /**
@@ -166,11 +176,11 @@ export class SqliteReadSnapshot implements ReadSnapshot {
     return this.read((db) => {
       const take = pageSize(limit);
       if (take === 0) return [];
-      const cursor = after === null ? undefined : cursorKey(db, after);
-      if (nodeId === null) return (cursor === undefined ? db.all<SqlRevision>(SQL.revisions[0], take)
-        : db.all<SqlRevision>(SQL.revisions[1], cursor.time_key, cursor.id_key, take)).map(revisionRow);
-      return (cursor === undefined ? db.all<SqlRevision>(SQL.nodeHistory[0], nodeId, take)
-        : db.all<SqlRevision>(SQL.nodeHistory[1], nodeId, cursor.time_key, cursor.id_key, take)).map(revisionRow);
+      const cursor = after === null ? undefined : cursorKey(db, this.sql.revisionKey, after);
+      if (nodeId === null) return (cursor === undefined ? db.all<SqlRevision>(this.sql.revisions[0], take)
+        : db.all<SqlRevision>(this.sql.revisions[1], cursor.time_key, cursor.id_key, take)).map(revisionRow);
+      return (cursor === undefined ? db.all<SqlRevision>(this.sql.nodeHistory[0], nodeId, take)
+        : db.all<SqlRevision>(this.sql.nodeHistory[1], nodeId, cursor.time_key, cursor.id_key, take)).map(revisionRow);
     });
   }
 
@@ -187,7 +197,7 @@ export class SqliteReadSnapshot implements ReadSnapshot {
       const result: PendingTarget[] = [];
       const [kind, afterId] = after === null ? [null, null] : confirmationKey(after);
       if (kind !== 'seed') {
-        const cursor = afterId === null ? undefined : cursorKey(db, afterId);
+        const cursor = afterId === null ? undefined : cursorKey(db, this.sql.revisionKey, afterId);
         if (cursor !== undefined && (cursor.kind !== 'formation' || cursor.by === 'import')) {
           throw new CognitionError('invalid', '续读键不是日常形成记录');
         }
@@ -199,15 +209,15 @@ export class SqliteReadSnapshot implements ReadSnapshot {
         while (result.length < take && (human < humans.length || ai < agents.length)) {
           const item = ai >= agents.length || (human < humans.length && newer(humans[human], agents[ai]))
             ? humans[human++] : agents[ai++];
-          const nodeIds = db.all<{ id: string }>(SQL.pendingMembers, item.revision_id).map(({ id }) => id);
+          const nodeIds = db.all<{ id: string }>(this.sql.pendingMembers, item.revision_id).map(({ id }) => id);
           result.push({ revisionId: item.revision_id, by: item.by, at: item.at, summary: item.summary, nodeIds });
         }
       }
       if (result.length < take && by.includes('import')) {
         const remaining = take - result.length;
         type Seed = { id: string; title: string };
-        const seeds = kind === 'seed' && afterId !== null ? db.all<Seed>(SQL.pendingImports[1], idKey(afterId), remaining)
-          : db.all<Seed>(SQL.pendingImports[0], remaining);
+        const seeds = kind === 'seed' && afterId !== null ? db.all<Seed>(this.sql.pendingImports[1], idKey(afterId), remaining)
+          : db.all<Seed>(this.sql.pendingImports[0], remaining);
         for (const { id, title } of seeds) result.push({ seedNodeId: id, title });
       }
       return result;
@@ -222,8 +232,8 @@ export class SqliteReadSnapshot implements ReadSnapshot {
    * @param take 已校验页额度
    */
   private formationPage(db: Connection, by: DailyActor, cursor: RevisionKey | undefined, take: number): PendingFormationRow[] {
-    return cursor === undefined ? db.all<PendingFormationRow>(SQL.pendingFormations[0], by, take)
-      : db.all<PendingFormationRow>(SQL.pendingFormations[1], by, cursor.time_key, cursor.id_key, take);
+    return cursor === undefined ? db.all<PendingFormationRow>(this.sql.pendingFormations[0], by, take)
+      : db.all<PendingFormationRow>(this.sql.pendingFormations[1], by, cursor.time_key, cursor.id_key, take);
   }
 
   /** 幂等释放读事务和连接；之后本快照不再提供查询。 */

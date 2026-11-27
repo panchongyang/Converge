@@ -135,6 +135,21 @@ describe('DSH 认知树 watch', () => {
     expect(events.isClosed()).toBe(true);
   });
 
+  it('归档可见性标记原样转发，不携带节点 ID', () => {
+    const events = fakeEvents();
+    const client = createCognitionClient({ sessionId: 'session-a', eventSource: events.factory });
+    const changes: { stamp: number; visibility?: true; revisions: unknown[] }[] = [];
+    client.watch('T1', (change) =>
+      changes.push({
+        stamp: change.stamp,
+        revisions: change.revisions,
+        ...(change.visibilityChanged ? { visibility: change.visibilityChanged } : {}),
+      }),
+    );
+    events.instances[0]!.emit('change', { treeId: 'T1', stamp: 5, revisions: [], visibilityChanged: true });
+    expect(changes).toEqual([{ stamp: 5, revisions: [], visibility: true }]);
+  });
+
   it('坏 change 不抛给 UI', () => {
     const events = fakeEvents();
     const client = createCognitionClient({ sessionId: 'session-a', eventSource: events.factory });

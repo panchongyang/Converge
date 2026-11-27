@@ -631,3 +631,22 @@
 .ct-confirmpreview__act {
   margin-top: var(--ct-s1);
 }
+
+/* —— 归档确认：与书写区分开，只针对当前判断的一次可撤回动作 —— */
+.ct-reader__archiveconfirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ct-s3);
+  margin-top: var(--ct-s4);
+  padding: var(--ct-s2) 0 var(--ct-s2) var(--ct-s3);
+  border-left: 2px solid var(--ct-warn);
+  color: var(--ct-ink-2);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+}
+
+.ct-reader__archivecopy {
+  flex: 1;
+  min-width: 180px;
+}

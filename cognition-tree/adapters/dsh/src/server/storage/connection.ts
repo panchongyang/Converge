@@ -1,7 +1,7 @@
 /** 工作线程里的一个 node:sqlite 连接。缓存本连接实际用到的固定语句，不持有树行或跨树句柄。 */
 import { DatabaseSync, type SQLInputValue, type StatementSync } from 'node:sqlite';
 import { CognitionError } from '@cognition-tree/kernel/types';
-import { APPLICATION_ID, SCHEMA, SCHEMA_VERSION } from './schema';
+import { APPLICATION_ID, ARCHIVE_SCHEMA, LEGACY_SCHEMA, LEGACY_SCHEMA_VERSION, SCHEMA, SCHEMA_VERSION, type SchemaVersion } from './schema';
 
 /**
  * 把宿主或 SQLite 异常转为可展示的存储错误，同时保留仅供上层诊断的原始原因。
@@ -94,16 +94,32 @@ export class Connection {
     this.exec('COMMIT');
   }
 
-  /** 检查已有库的固定 schema，拒绝未知表、索引、视图、触发器或被重写的模式。 */
-  verifySchema(): void {
-    // 不触及任何业务行；排除 SQLite 管理的统计表及自动索引。
-    const expected = new Set(SCHEMA);
+  /** 检查当前 SQLite 事务（含 WAL）中的版本和对应的精确结构，不触及业务行。 */
+  verifySchema(): SchemaVersion {
+    const version = this.get<{ user_version: number }>('PRAGMA user_version')?.user_version;
+    if ((version !== LEGACY_SCHEMA_VERSION && version !== SCHEMA_VERSION)
+      || this.get<{ application_id: number }>('PRAGMA application_id')?.application_id !== APPLICATION_ID) {
+      throw new CognitionError('storage', '工作区数据库格式不受支持');
+    }
+    // 排除 SQLite 管理的统计表及自动索引；未知或被重写的结构都不接受。
+    const expected = new Set(version === LEGACY_SCHEMA_VERSION ? LEGACY_SCHEMA : SCHEMA);
     const entries = this.all<{ sql: string }>(
       "SELECT sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT GLOB 'sqlite_*' LIMIT ?", expected.size + 1,
     );
     if (entries.length !== expected.size || entries.some(({ sql }) => !expected.delete(sql))) {
       throw new CognitionError('storage', '工作区数据库结构不受支持');
     }
+    return version;
+  }
+
+  /**
+   * 在调用方的写事务内增量升级；业务失败时 DDL 与版本头一同回滚。
+   * @param version 已在该事务中精确核对的版本
+   */
+  migrate(version: SchemaVersion): void {
+    if (version !== LEGACY_SCHEMA_VERSION) return;
+    this.exec(ARCHIVE_SCHEMA.join(';\n'));
+    this.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   }
 
   /** 写连接启用 WAL，确认实际模式；完整同步保证 COMMIT 成功后才可通知。 */

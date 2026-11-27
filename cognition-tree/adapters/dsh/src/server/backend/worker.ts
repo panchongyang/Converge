@@ -64,6 +64,18 @@ async function handle(message: Request): Promise<void> {
       return;
     }
     const entry = await workspace(message.root);
+    if (message.kind === 'archive') {
+      const operation = message.operation;
+      if (operation.action === 'list') {
+        send({ kind: 'ok', id: message.id, value: await entry.store.listArchived(operation.treeId) });
+      } else {
+        await entry.store.setArchived(operation.treeId, operation.nodeId, operation.action === 'archive');
+        // 本队列内提交后先失效旧读快照，再受理后续读；旧 cursor 不可读出归档前的数据。
+        await entry.kernel.invalidateViews(operation.treeId);
+        send({ kind: 'ok', id: message.id, value: null });
+      }
+      return;
+    }
     const value = message.kind === 'listTrees'
       ? await entry.store.listTrees()
       : await entry.kernel.dispatch(message.actor, message.op, message.input);

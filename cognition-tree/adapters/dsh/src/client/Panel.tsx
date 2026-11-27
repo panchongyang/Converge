@@ -20,6 +20,7 @@ import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { NodeId, TreeId } from '@cognition-tree/kernel/types';
 import { App } from '@cognition-tree/ui/app';
+import { createArchiveAccess } from './archive';
 import { createCognitionClient } from './transport';
 import { initialBinding, jumpChannel, sessionChannel, type JumpIntent, type SessionState } from './session';
 import { enterFromDirectory, panelMountKey, rebindForSession } from './tree-entry';
@@ -188,6 +189,8 @@ function PanelBody(props: {
 }) {
   const { view, jump, onBackToTrees } = props;
   const client = useMemo(() => createCognitionClient({ sessionId: view.sessionId }), [view.sessionId]);
+  // 归档与恢复只经当前会话的同源端口；独立浏览器入口不传这个端口。
+  const archive = useMemo(() => createArchiveAccess({ sessionId: view.sessionId }), [view.sessionId]);
   const initialNodeId = view.initialNodeId ?? jump?.nodeId;
   // 会话/树/要显示的目标变化时重挂，避免沿用上一棵树的选择与读会话。
   // refresh 让“新建当前缺失树”这种树 ID 与目标都没变的情况也重新读一次，
@@ -200,6 +203,7 @@ function PanelBody(props: {
       client={client}
       bridge={{}}
       onBackToTrees={onBackToTrees}
+      archive={archive}
       {...(initialNodeId ? { initialNodeId } : {})}
     />
   );

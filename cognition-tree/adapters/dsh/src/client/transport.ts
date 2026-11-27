@@ -125,7 +125,12 @@ export function createCognitionClient(options: ClientOptions): CognitionClient {
           return;
         }
         if (!notice || notice.treeId !== treeId || !Array.isArray(notice.revisions)) return;
-        const change: TreeChange = { treeId, stamp: notice.stamp, revisions: notice.revisions };
+        const change: TreeChange = {
+          treeId,
+          stamp: notice.stamp,
+          revisions: notice.revisions,
+          ...(notice.visibilityChanged === true ? { visibilityChanged: true as const } : {}),
+        };
         listener(change);
       };
       // 首屏读取可能先于订阅建立；重连也可能漏事件。ready 后再读才覆盖这两个间隙。

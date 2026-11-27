@@ -13,6 +13,9 @@ import { useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Button, TextField } from '../../components';
 import { toUiError, type UiError } from '../../utils/errors';
+import type { ArchiveAccess } from '../../types/ports';
+import { ARCHIVE_COPY } from '../archive/model';
+import { ArchiveList } from '../archive/ArchiveList';
 import { TREE_ENTRY_COPY, treeDraftIssue, treeErrorText } from '../tree/model';
 import {
   DIRECTORY_COPY,
@@ -45,6 +48,11 @@ export interface TreeDirectoryProps {
   onOpen: (item: DirectoryItem) => void;
   /** 新建树；失败时抛出带 code 的业务错误，由本组件就地显示。 */
   onCreate: (treeId: string, rootQuestion: string) => Promise<void>;
+  /**
+   * 归档端口；给了才显示整树归档与「已归档的树」，独立浏览器不提供。
+   * 归档成功只重读目录，不在提交前移除行。
+   */
+  archive?: ArchiveAccess;
 }
 
 /**
@@ -52,8 +60,12 @@ export interface TreeDirectoryProps {
  * @param props 见 TreeDirectoryProps；目录数据由宿主读取，本组件不直接 fetch
  */
 export function TreeDirectory(props: TreeDirectoryProps) {
-  const { status, items, unavailable, error, refreshing, onRefresh, onOpen, onCreate } = props;
+  const { status, items, unavailable, error, refreshing, onRefresh, onOpen, onCreate, archive } = props;
   const [formOpen, setFormOpen] = useState(false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const [archiveRefresh, setArchiveRefresh] = useState(0);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<UiError | null>(null);
   const [newId, setNewId] = useState('');
   const [rootQuestion, setRootQuestion] = useState('');
   const [creating, setCreating] = useState(false);
@@ -100,6 +112,25 @@ export function TreeDirectory(props: TreeDirectoryProps) {
     }
   };
 
+  /**
+   * 归档一整棵树：服务端确认后重读目录与归档列表；成功前不移除行。
+   * @param treeId 要归档的树
+   */
+  const archiveTree = async (treeId: string) => {
+    if (!archive || archivingId) return;
+    setArchivingId(treeId);
+    setArchiveError(null);
+    try {
+      await archive.archive({ treeId });
+      setArchiveRefresh((n) => n + 1);
+      onRefresh();
+    } catch (e) {
+      setArchiveError(toUiError(e));
+    } finally {
+      setArchivingId(null);
+    }
+  };
+
   /** Esc 只收起未提交的表单，不把按键交给宿主快捷键；请求在路上时不打断。 */
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Escape') return;
@@ -134,6 +165,17 @@ export function TreeDirectory(props: TreeDirectoryProps) {
           >
             {refreshing ? DIRECTORY_COPY.refreshing : DIRECTORY_COPY.refresh}
           </button>
+          {archive && (
+            <button
+              type="button"
+              className={'ct-textbtn ct-dir__refresh' + (archivedOpen ? ' is-on' : '')}
+              aria-expanded={archivedOpen}
+              onClick={() => setArchivedOpen((open) => !open)}
+              title={archivedOpen ? '收起已归档的树' : '查看已归档的树并恢复'}
+            >
+              {ARCHIVE_COPY.archivedTrees}
+            </button>
+          )}
           {status !== 'loading' && !empty && (
             <Button size="sm" variant="primary" disabled={!canCreate} onClick={toggleForm} aria-expanded={formOpen}>
               {formOpen ? DIRECTORY_COPY.cancel : DIRECTORY_COPY.newTree}
@@ -144,6 +186,28 @@ export function TreeDirectory(props: TreeDirectoryProps) {
 
       <div className="ct-dir__scroll ct-scroll">
         <div className="ct-dir__body">
+          {archive && archivedOpen && (
+            <div className="ct-dir__archived">
+              <ArchiveList
+                archive={archive}
+                refreshKey={archiveRefresh}
+                onRestored={() => onRefresh()}
+              />
+              <div className="ct-dir__archivedfoot">
+                <button type="button" className="ct-textbtn" onClick={() => setArchivedOpen(false)}>
+                  收起
+                </button>
+              </div>
+            </div>
+          )}
+
+          {archiveError && (
+            <p className="ct-dir__error" role="alert">
+              {ARCHIVE_COPY.archiveFailed}
+              {archiveError.message}
+            </p>
+          )}
+
           {formOpen && (
             <form
               className="ct-dir__form"
@@ -238,11 +302,11 @@ export function TreeDirectory(props: TreeDirectoryProps) {
               {!empty && (
                 <ul className="ct-dir__list" aria-label="全部树">
                   {items.map((item) => (
-                    <li key={item.treeId}>
+                    <li key={item.treeId} className={archive ? 'ct-dir__item' : undefined}>
                       <button
                         type="button"
                         className="ct-dir__row"
-                        disabled={creating}
+                        disabled={creating || archivingId !== null}
                         onClick={() => {
                           setCreateError(null);
                           setIssue(null);
@@ -257,6 +321,17 @@ export function TreeDirectory(props: TreeDirectoryProps) {
                           </span>
                         </span>
                       </button>
+                      {archive && (
+                        <button
+                          type="button"
+                          className="ct-textbtn ct-dir__archive"
+                          disabled={creating || archivingId !== null}
+                          onClick={() => void archiveTree(item.treeId)}
+                          title="把这棵树移到已归档的树；内容不变，可恢复"
+                        >
+                          {archivingId === item.treeId ? ARCHIVE_COPY.archiveTreePending : ARCHIVE_COPY.archiveTree}
+                        </button>
+                      )}
                     </li>
                   ))}
                   {partial.map((treeId) => (

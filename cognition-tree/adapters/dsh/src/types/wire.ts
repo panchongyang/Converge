@@ -10,6 +10,16 @@ export const CALL_PATH = '/api/cognition-tree/call';
 export const WATCH_PATH = '/api/cognition-tree/watch';
 /** 当前已绑定工作区的只读导航目录；不是针对某一棵树的领域操作。 */
 export const TREES_PATH = '/api/cognition-tree/trees';
+/** 只在已认证的人侧连接中开放；不属于具名工具或通用树读取。 */
+export const ARCHIVE_PATH = '/api/cognition-tree/archive';
+
+/** 列表省略 treeId 时只查整树；指定 treeId 时只列该活动树的显式分支归档。 */
+export type ArchiveAction = { action: 'list'; treeId?: string }
+  | { action: 'archive' | 'restore'; treeId: string; nodeId?: string };
+/** 已归档项的恢复定位和标题；整树没有 nodeId。 */
+export interface ArchiveItem { treeId: string; nodeId?: string; title: string }
+/** 修改返回 null；列表仅返回可由人恢复的显式标记。 */
+export type ArchiveResult = ArchiveItem[] | null;
 
 /** 每棵树只显示稳定标识与实际根的问题；旧库根 ID 不必等于文件中的树 ID。 */
 export interface WorkspaceTreeItem { treeId: string; rootId: string; rootQuestion: string }
@@ -37,7 +47,13 @@ export type CallResult<K extends OpName = OpName> =
   | { ok: false; error: { code: string; message: string } };
 
 /** SSE change 只在后台确认提交后发出，不含工作区路径；首帧 ready 是 {sessionId}。 */
-export interface ChangeNotice { treeId: string; stamp: number; revisions: Revision[] }
+export interface ChangeNotice {
+  treeId: string;
+  stamp: number;
+  revisions: Revision[];
+  /** 归档/恢复刷新信号，不携带受影响节点的 ID 或正文。 */
+  visibilityChanged?: true;
+}
 
 /** 只在当前连接通知、不存回放。重连后客户端须重读；慢消费者断开而不阻塞提交。 */
 export const WATCH_EVENTS = { ready: 'ready', change: 'change' } as const;

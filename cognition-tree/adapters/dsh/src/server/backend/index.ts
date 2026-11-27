@@ -6,7 +6,7 @@ import { Worker } from 'node:worker_threads';
 import type { OpInput, OpName, OpOutput } from '@cognition-tree/kernel/catalog/contracts';
 import { CognitionError, type DailyActor } from '@cognition-tree/kernel/types';
 import type { CommitNotice, ProcessInput, Reply, Request } from './protocol';
-import type { WorkspaceTreeDirectory } from '../../types/wire';
+import type { ArchiveAction, ArchiveResult, WorkspaceTreeDirectory } from '../../types/wire';
 import type { ProcessRecord } from '../storage/process';
 
 export interface Backend {
@@ -22,6 +22,8 @@ export interface Backend {
   listTrees(root: string): Promise<WorkspaceTreeDirectory>;
   /** 保存或点读独立过程材料；不调用认知树写命令。 */
   process(root: string, input: ProcessInput): Promise<ProcessRecord>;
+  /** 人侧管理归档。@param root 宿主解析的工作区绝对路径。@param operation 归档路由校验的意图。 */
+  archive(root: string, operation: ArchiveAction): Promise<ArchiveResult>;
   /** 订阅已提交的通知；listener 失败不会改变写入结果。返回取消订阅函数。 */
   watch(listener: (root: string, change: CommitNotice) => void): () => void;
   /** 停止接收请求、等待已接收请求结束并释放线程；可重复调用。 */
@@ -94,6 +96,9 @@ export function createBackend(workerURL = new URL('./worker.js', import.meta.url
     },
     process(root, input) {
       return request<ProcessRecord>({ kind: 'process', root, input });
+    },
+    archive(root, operation) {
+      return request<ArchiveResult>({ kind: 'archive', root, operation });
     },
     watch(listener) {
       if (closed) return () => {};

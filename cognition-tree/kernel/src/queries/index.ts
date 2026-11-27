@@ -17,6 +17,8 @@ export type { HistoryInput, UnconfirmedInput } from './records';
 
 /** 公开只读能力；所有目标、范围、筛选与页大小都由调用方显式给出。 */
 export interface Queries {
+  /** 存储可见域改变后释放该树的续读快照。@param treeId 已提交可见性变更的树。 */
+  invalidateViews(treeId: string): Promise<void>;
   /**
    * 按独立预算读取局部树；每页连回原根，续读不混版本。
    * @param treeId 所选树 ID
@@ -61,6 +63,7 @@ export interface Queries {
 export function createQueries(store: TreeStore, aiViewCost?: ViewWireCost): Queries {
   const views = createViewReader(store, aiViewCost);
   return {
+    invalidateViews: views.invalidate,
     readView: views.read,
     /**
      * 点查前一并回收过期视图。
