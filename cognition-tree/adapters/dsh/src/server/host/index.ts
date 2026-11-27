@@ -1,6 +1,6 @@
 /**
  * DSH Cordis 服务端插件入口：exports {name, inject, apply}，打包为 dsh-cognition-tree/lib/index.js。
- * 状态在 HostRuntime；后台动态加载，七个工具与三个认证 exact 路由仅增强宿主。
+ * 状态在 HostRuntime；后台动态加载，具名工具与认证 exact 路由仅增强宿主。
  * 边界依据：docs/design/kernel-interfaces.md §3.1/3.3。没有消息拦截器、独立服务、profile 写入或工具代理人确认。
  */
 import type { HostContext } from './abi';

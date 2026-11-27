@@ -1,11 +1,12 @@
 /**
  * 按稳定索引键推进的局部树遍历。每次最多向端口取一条邻接行，空查、重复边及父链查找均计费。
- * 状态只随已经检查的行增长；不先加载节点表/引用表，也不读取长正文。每个连接路径原子投影。
+ * 状态只随已经检查的行增长；不先加载节点表/引用表。仅详情视图为候选行读取正文，整条连接路径原子投影。
  * 同一节点按“深度、剩余跳数、是否可起跳”的非支配状态去重，不把首次命中当作全范围已覆盖。
  */
 import { CognitionError } from '../types/index';
-import type { Boundary, Budget, Depth, Expand, NodeRow, ReadSnapshot, Ref, TreeView } from '../types/index';
+import type { Boundary, Budget, Depth, Expand, NodeDetail, NodeRow, ReadSnapshot, Ref, TreeView } from '../types/index';
 import { compareIds } from '../utils/index';
+import { completeNodeDetail } from './records';
 import { ViewPage, type OutputLimit, type Projection, type ViewWireCost } from './view-page';
 
 /** 超限处实测的限制项；扫描在下一次实际访问前停止，不猜最终需求。 */
@@ -49,6 +50,8 @@ export interface Traversal {
   tasks: Task[];
   coverage: Map<string, Coverage[]>;
   hits: Set<string>;
+  /** 只随仍被页、父链或待投影路径持有的轻行存活，不跨游标累存已完成的大正文。 */
+  details?: WeakMap<NodeRow, NodeDetail>;
 }
 
 /** 仅用于在本次预算用尽时暂停；不越过公开错误边界。 */
@@ -64,6 +67,35 @@ class Scans {
   constructor(private readonly maximum: number) {}
   /** 为一次单项查找（包含空查）计费，无余额时不访问端口。 */
   take(): void { if (this.used >= this.maximum) throw new ScanLimit(); this.used++; }
+}
+
+/**
+ * 为准备投影的新行补详情，轻行和详情一并通过输出预算才真正进入本页。
+ * @param rows 已经连接的候选行
+ * @param page 当前页；内含节点已带详情，不重复读取
+ * @param state 仅在详细模式持有缓存的查询和快照
+ * @param scans 本页详情节点和当前修订查找也各计一次
+ */
+async function readDetails(
+  rows: NodeRow[], page: ViewPage, state: Traversal, scans: Scans,
+): Promise<ReadonlyMap<string, NodeDetail>> {
+  const cache = state.details!;
+  const details = new Map<string, NodeDetail>();
+  for (const row of rows) {
+    if (page.has(row.id)) continue;
+    let detail = cache.get(row);
+    if (!detail) {
+      scans.take();
+      const node = await state.snapshot.readNode(row.id);
+      if (!node || node.id !== row.id || node.parentId !== row.parentId) {
+        throw new CognitionError('storage', '节点详情与同快照的轻行不匹配。');
+      }
+      detail = await completeNodeDetail(state.snapshot, node, () => scans.take());
+      cache.set(row, detail);
+    }
+    details.set(row.id, detail);
+  }
+  return details;
 }
 
 /**
@@ -184,11 +216,15 @@ function beginRefs(task: Task, expand: Expand): void {
  * @param focusId 已解析的焦点
  * @param expand 显式展开范围
  * @param expiresAt 绝对到期时刻（毫秒），续读不无限延长
+ * @param includeDetails 是否随页投影完整详情；关闭时不分配详情缓存
  */
-export function createTraversal(snapshot: ReadSnapshot, focusId: string, expand: Expand, expiresAt: number): Traversal {
+export function createTraversal(
+  snapshot: ReadSnapshot, focusId: string, expand: Expand, expiresAt: number, includeDetails: boolean,
+): Traversal {
   return {
     snapshot, focusId, expand: { ...expand }, expiresAt, started: false,
     tasks: [], coverage: new Map(), hits: new Set([focusId]), initial: connection(focusId),
+    ...(includeDetails ? { details: new WeakMap<NodeRow, NodeDetail>() } : {}),
   };
 }
 
@@ -208,16 +244,22 @@ export async function readViewPage(
   const scans = new Scans(budget.maxScans);
   const page = new ViewPage(state.snapshot.rootId, state.focusId, state.snapshot.stamp, budget, cursor, wireCost);
   let progress = state.started ? 0 : 1;
-  if (!state.base) {
-    try { await connect(state.initial!, undefined, state, scans); }
-    catch (error) { if (error instanceof ScanLimit) throw budgetError({ maxScans: true }); throw error; }
-    state.base = state.initial!.rows;
-    state.initial = undefined;
-    schedule(state, state.base[0], state.expand.subtreeDepth, state.expand.jumpHops, true);
+  let baseDetails: ReadonlyMap<string, NodeDetail> | undefined;
+  try {
+    if (!state.base) {
+      await connect(state.initial!, undefined, state, scans);
+      state.base = state.initial!.rows;
+      state.initial = undefined;
+      schedule(state, state.base[0], state.expand.subtreeDepth, state.expand.jumpHops, true);
+    }
+    if (state.details) baseDetails = await readDetails(state.base, page, state, scans);
+  } catch (error) {
+    if (error instanceof ScanLimit) throw budgetError({ maxScans: true });
+    throw error;
   }
   // 无跳转的原生 JSON 不会因升格或合用编码而缩短；紧凑候选可能重分共享项，不宣称全查询字节下界。
   const knownByteLowerBound = state.expand.jumpHops === 0 && wireCost === undefined;
-  const baseLimit = page.apply({ rows: state.base, hits: hits(state, state.base) }, null);
+  const baseLimit = page.apply({ rows: state.base, details: baseDetails, hits: hits(state, state.base) }, null);
   if (baseLimit) throw budgetError(baseLimit, knownByteLowerBound);
   state.started = true;
   let lastMarker = boundary(state.focusId, 'children', 'budget');
@@ -242,7 +284,9 @@ export async function readViewPage(
       if (!page.has(task.row.id)) {
         task.connection ??= connection(task.row.id, task.row);
         await connect(task.connection, page, state, scans);
-        if (!tryProject({ rows: task.connection.rows, hits: hits(state, task.connection.rows) }, projectionMarker(task, false))) break;
+        const rows = task.connection.rows;
+        const details = state.details ? await readDetails(rows, page, state, scans) : undefined;
+        if (!tryProject({ rows, details, hits: hits(state, rows) }, projectionMarker(task, false))) break;
         task.connection = undefined;
       }
       lastMarker = marker(state, page);
@@ -310,7 +354,8 @@ export async function readViewPage(
       const pending = task.pending!;
       if (pending.connection) await connect(pending.connection, page, state, scans);
       const rows = pending.connection?.rows ?? [];
-      if (!tryProject({ rows, hits: hits(state, rows, pending.landingId), ref: pending.ref }, projectionMarker(task, false))) break;
+      const details = state.details && rows.length ? await readDetails(rows, page, state, scans) : undefined;
+      if (!tryProject({ rows, details, hits: hits(state, rows, pending.landingId), ref: pending.ref }, projectionMarker(task, false))) break;
       task.after = pending.child?.id ?? pending.ref!.id;
       task.pending = undefined;
       progress++;

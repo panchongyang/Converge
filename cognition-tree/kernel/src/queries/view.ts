@@ -25,7 +25,10 @@ interface Entry { key: string; state: Traversal }
 /** 视图读取器内部接口，index 还会在其它短查询入口调用 cleanup。 */
 export interface ViewReader {
   cleanup(): Promise<void>;
-  read(treeId: string, focus: Focus, expand: Expand, budget: Budget, onLimit: 'fold' | 'exact', cursor?: string, aiProjection?: boolean): Promise<TreeView>;
+  read(
+    treeId: string, focus: Focus, expand: Expand, budget: Budget, onLimit: 'fold' | 'exact',
+    cursor?: string, aiProjection?: boolean, includeDetails?: boolean,
+  ): Promise<TreeView>;
 }
 
 /**
@@ -68,19 +71,21 @@ export function createViewReader(store: TreeStore, aiViewCost?: ViewWireCost): V
    * @param budget 本页独立预算，可与上页不同
    * @param onLimit 超限策略，续读必须一致
    * @param cursor 上页返回的令牌；首次省略
-   * @param aiProjection 可信 AI 入口使用模型度量；零跳数时由输入统一表达引用未查询
+   * @param aiProjection 可信 AI 入口零跳数时省略 refs/scope，轻量页使用注入的模型度量
+   * @param includeDetails 是否随页返回完整详情；省略等价于 false，续读须保持一致
    */
   async function read(
     treeId: string, focus: Focus, expand: Expand, budget: Budget, onLimit: 'fold' | 'exact', cursor?: string,
-    aiProjection = false,
+    aiProjection = false, includeDetails = false,
   ): Promise<TreeView> {
     validateView(treeId, focus, expand, budget, onLimit, cursor);
+    if (typeof includeDetails !== 'boolean') throw new CognitionError('invalid', 'includeDetails 必须是布尔值。');
     // 在第一个异步让出点之前捕获已校验参数，调用方后续改对象不能放宽预算或改变范围。
     const requestExpand = { ...expand };
     const requestBudget = { ...budget };
     const omitRefScope = aiProjection && requestExpand.jumpHops === 0;
-    const wireCost = aiProjection ? aiViewCost : undefined;
-    const key = viewKey(treeId, focus, requestExpand, onLimit, omitRefScope, wireCost !== undefined);
+    const wireCost = aiProjection && !includeDetails ? aiViewCost : undefined;
+    const key = viewKey(treeId, focus, requestExpand, onLimit, omitRefScope, wireCost !== undefined, includeDetails);
     const focusId = typeof focus === 'string' ? focus : undefined;
     await cleanup();
     let entry: Entry | undefined;
@@ -103,7 +108,7 @@ export function createViewReader(store: TreeStore, aiViewCost?: ViewWireCost): V
         const snapshot = await store.openRead(treeId);
         entry = {
           key,
-          state: createTraversal(snapshot, focusId ?? snapshot.rootId, requestExpand, Date.now() + VIEW_TTL_MS),
+          state: createTraversal(snapshot, focusId ?? snapshot.rootId, requestExpand, Date.now() + VIEW_TTL_MS, includeDetails),
         };
       }
       const token = `q${instance}.${(++sequence).toString(36)}`;

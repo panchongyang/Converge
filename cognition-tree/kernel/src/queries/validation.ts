@@ -138,12 +138,17 @@ export function confirmTarget(target: unknown): asserts target is ConfirmTarget 
  * @param expand 展开范围
  * @param onLimit 超限策略
  * @param omitRefScope 本查询是否采用零跳数省略投影
- * @param modelWire 本查询是否使用宿主模型表示计费；与人侧 JSON 不混续
+ * @param modelWire 本查询是否使用宿主模型表示计费；与原生 JSON 不混续
+ * @param includeDetails 是否为每个节点投影详情；不同模式不能混续
  * @returns 仅供游标绑定校验的内部键
  */
-export function viewKey(treeId: string, focus: Focus, expand: Expand, onLimit: 'fold' | 'exact', omitRefScope: boolean, modelWire: boolean): string {
+export function viewKey(
+  treeId: string, focus: Focus, expand: Expand, onLimit: 'fold' | 'exact',
+  omitRefScope: boolean, modelWire: boolean, includeDetails: boolean,
+): string {
   return JSON.stringify([
     treeId, typeof focus === 'string' ? ['node', focus] : ['root'],
-    expand.subtreeDepth, expand.jumpHops, expand.direction, expand.jumpFrom, expand.afterJumpDepth, onLimit, omitRefScope, modelWire,
+    expand.subtreeDepth, expand.jumpHops, expand.direction, expand.jumpFrom, expand.afterJumpDepth,
+    onLimit, omitRefScope, modelWire, includeDetails,
   ]);
 }

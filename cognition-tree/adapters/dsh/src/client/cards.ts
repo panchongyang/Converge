@@ -21,7 +21,7 @@
 import { AI_TOOLS } from '../types/wire';
 import { normalizeId } from './session';
 
-/** 只登记写入工具；其余四个读工具没有“待确认/变更”语义。 */
+/** 只为新增与决定工具登记卡片；读工具没有“待确认/变更”语义。 */
 export const WRITE_TOOL_NAMES = [AI_TOOLS.addBranch, AI_TOOLS.decideNode] as const;
 
 export type WriteToolName = (typeof WRITE_TOOL_NAMES)[number];

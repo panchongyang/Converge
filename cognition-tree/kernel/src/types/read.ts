@@ -8,6 +8,7 @@
  */
 import type { DailyActor } from './actor';
 import type { NodeId, RevisionId } from './ids';
+import type { NodeDetail } from './node-detail';
 import type { BranchState, Confirmation } from './node-status';
 import type { Origin } from './origin';
 import type { Ref } from './ref';
@@ -78,6 +79,8 @@ export interface NodeRow {
 export interface ViewNode extends NodeRow {
   /** hit 落在请求范围内；link 只为把命中节点连回根而补入的祖先，其余孩子未读。 */
   role: 'hit' | 'link';
+  /** 仅在 includeDetails=true 时返回；命中和仅连接的节点都带同快照的点查详情。 */
+  detail?: NodeDetail;
 }
 
 /**

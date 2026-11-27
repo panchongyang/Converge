@@ -551,9 +551,13 @@ describe('AI 紧凑读取视图', () => {
 
   it('页内语法说明覆盖版本、桶表拼接、默认值、引用与边界，不要求额外解码函数', () => {
     expect(AI_READ_VIEW_GUIDE).toContain('CTV2');
+    expect(AI_READ_VIEW_GUIDE).toContain('includeDetails');
+    expect(AI_READ_VIEW_GUIDE).toContain('detail');
+    expect(AI_READ_VIEW_GUIDE).toContain('完整 JSON');
+    expect(AI_READ_VIEW_GUIDE).toContain('focus');
+    expect(AI_READ_VIEW_GUIDE).not.toContain('read_node');
     expect(AI_READ_VIEW_GUIDE).toContain('<k>');
     expect(AI_READ_VIEW_GUIDE).toContain('node-rev-');
-    expect(AI_READ_VIEW_GUIDE).toContain('read_node');
     expect(AI_READ_VIEW_GUIDE).toContain('~ce=1-100');
     expect(AI_READ_VIEW_GUIDE).toContain('不需要额外解码工具');
   });

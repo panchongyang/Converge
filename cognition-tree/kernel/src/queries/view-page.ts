@@ -2,12 +2,14 @@
  * 一页视图的连通投影与精确 UTF-8 计费。只持有本页行；遍历状态在 traversal，快照在 view。
  * 缺省按最终 JSON（含游标、引用、边界和标点）增量计费；宿主可为有界的模型投影注入精确字节度量。
  */
-import type { Boundary, Budget, NodeRow, Ref, TreeView, ViewNode } from '../types/index';
+import type { Boundary, Budget, NodeDetail, NodeRow, Ref, TreeView, ViewNode } from '../types/index';
 import { utf8ByteLength } from '../utils/index';
 
 /** 一次原子投影：连回根的轻行、实际命中的节点、引用和已确定的边界。 */
 export interface Projection {
   rows?: NodeRow[];
+  /** 同批行的详情；未提供时沿用页内同 ID 已有的详情。 */
+  details?: ReadonlyMap<string, NodeDetail>;
   hits?: string[];
   ref?: Ref;
   boundaries?: Boundary[];
@@ -116,7 +118,10 @@ export class ViewPage {
     for (const row of rows) {
       if (!oldNodes.has(row.id)) oldNodes.set(row.id, this.nodes.get(row.id));
       const old = this.nodes.get(row.id);
-      const node: ViewNode = { ...row, role: old?.role === 'hit' || hits.has(row.id) ? 'hit' : 'link' };
+      const detail = projection.details?.get(row.id) ?? old?.detail;
+      const node: ViewNode = {
+        ...row, role: old?.role === 'hit' || hits.has(row.id) ? 'hit' : 'link', ...(detail ? { detail } : {}),
+      };
       this.nodeBytes += bytes(node) - (old ? bytes(old) : 0);
       this.nodes.set(row.id, node);
     }

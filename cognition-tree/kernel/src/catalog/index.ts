@@ -2,7 +2,7 @@
  * 内核公开操作目录（接口单 §3.1）。装配一次模型与查询会话；本层只识别操作和可信身份，
  * 不保存树、不分配节点 ID，也不发布 UI 通知。存储端口和时钟来自宿主或测试。
  */
-import { createWriteModel } from '../models';
+import { createWriteModel, requireExpectedStamp } from '../models';
 import { createQueries, type ViewWireCost } from '../queries';
 import { CognitionError, type Clock, type DailyActor, type TreeStore } from '../types';
 import type { OpInput, OpName, OpOutput } from './contracts';
@@ -25,6 +25,11 @@ type Operations = { [K in OpName]: {
   run: (actor: DailyActor, input: OpInput[K]) => Promise<OpOutput[K]>;
 } };
 
+/** 只在字段确实省略时使用无护栏的旧写入路径。 */
+function optionalStamp(input: { expectedStamp?: number }): number | undefined {
+  return Object.hasOwn(input, 'expectedStamp') ? requireExpectedStamp(input.expectedStamp) : undefined;
+}
+
 /**
  * 用注入端口组装这一实例的用例；不同实例不共享查询游标或监听者。
  * @param deps.store 读已提交快照、原子提交单树更改的端口
@@ -36,15 +41,20 @@ export function createKernel(deps: { store: TreeStore; clock: Clock; aiViewCost?
   const read = createQueries(deps.store, deps.aiViewCost);
   const operations: Operations = {
     createTree: { access: 'both', run: (actor, p) => write.createTree(actor, p) },
-    addBranch: { access: 'both', run: (actor, p) => write.addBranch(actor, p.treeId, p.placement, p.draft) },
-    decideNode: { access: 'both', run: (actor, p) => write.decideNode(actor, p.treeId, p.nodeId, p.decision) },
+    addBranch: { access: 'both', run: (actor, p) => write.addBranch(actor, p.treeId, p.placement, p.draft, optionalStamp(p)) },
+    decideNode: { access: 'both', run: (actor, p) => write.decideNode(actor, p.treeId, p.nodeId, p.decision, optionalStamp(p)) },
     confirm: { access: 'human', run: (_, p) => write.confirm(p.treeId, p.target) },
     bootstrapTree: { access: 'human', run: (_, p) => write.bootstrapTree(p.seed) },
     readNode: { access: 'both', run: (_, p) => read.readNode(p.treeId, p.nodeId) },
     readHistory: { access: 'both', run: (_, p) => read.readHistory(p.treeId, p) },
     readUnconfirmed: { access: 'both', run: (_, p) => read.readUnconfirmed(p.treeId, p) },
     // AI 已在请求中给出零跳数，不必把同一个未查询范围贴到每个命中；人侧保留节点上的入口提示。
-    readView: { access: 'both', run: (actor, p) => read.readView(p.treeId, p.focus, p.expand, p.budget, p.onLimit, p.cursor, actor === 'ai') },
+    readView: {
+      access: 'both',
+      run: (actor, p) => read.readView(
+        p.treeId, p.focus, p.expand, p.budget, p.onLimit, p.cursor, actor === 'ai', p.includeDetails,
+      ),
+    },
   };
   return {
     async dispatch<K extends OpName>(actor: DailyActor, op: K, input: OpInput[K]): Promise<OpOutput[K]> {

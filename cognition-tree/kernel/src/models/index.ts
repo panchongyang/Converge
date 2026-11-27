@@ -47,10 +47,11 @@ export function createWriteModel(store: TreeStore, clock: Clock) {
      * @param treeId 已选的目标树
      * @param placement 明确落点，父节点与被替代节点二选一
      * @param draft 仅用于新节点的正文、初始状态和引用
+     * @param expectedStamp 可选；据此作出本次新判断的当前树版本
      * @returns 提交完成后返回新节点的稳定 ID
      * @throws CognitionError 无效意图或目标不存在、保存失败（invalid / missing / storage）
      */
-    async addBranch(actor: DailyActor, treeId: TreeId, placement: Placement, draft: Draft): Promise<NodeId> {
+    async addBranch(actor: DailyActor, treeId: TreeId, placement: Placement, draft: Draft, expectedStamp?: number): Promise<NodeId> {
       requireDailyActor(actor);
       return write(store, treeId, 'existing', async (transaction) => {
         const branch = await prepareBranch(transaction, placement, draft);
@@ -58,7 +59,7 @@ export function createWriteModel(store: TreeStore, clock: Clock) {
         const id = await allocateNodeId(transaction, revision.id);
         commitFormation(transaction, planAddBranch(branch, id), actor, revision);
         return id;
-      });
+      }, expectedStamp);
     },
 
     /**
@@ -67,17 +68,18 @@ export function createWriteModel(store: TreeStore, clock: Clock) {
      * @param treeId 已选的目标树
      * @param nodeId 被操作的原节点 ID，执行替代时指候选
      * @param decision 明确的状态决定与理由
+     * @param expectedStamp 可选；据此作出本次新判断的当前树版本
      * @returns 提交完成后返回被操作的原节点 ID
      * @throws CognitionError 无效意图或目标不存在、保存失败（invalid / missing / storage）
      */
-    async decideNode(actor: DailyActor, treeId: TreeId, nodeId: NodeId, decision: Decision): Promise<NodeId> {
+    async decideNode(actor: DailyActor, treeId: TreeId, nodeId: NodeId, decision: Decision, expectedStamp?: number): Promise<NodeId> {
       requireDailyActor(actor);
       return write(store, treeId, 'existing', async (transaction) => {
         const plan = await planDecision(transaction, nodeId, decision);
         const revision = await newRevision(transaction, clock);
         commitFormation(transaction, plan, actor, revision);
         return nodeId;
-      });
+      }, expectedStamp);
     },
 
     /**
@@ -135,21 +137,36 @@ function requireDailyActor(actor: DailyActor): void {
   if (actor !== 'human' && actor !== 'ai') throw new CognitionError('invalid', '日常变更执行者必须是 human 或 ai');
 }
 
+/** 校验明确提供的版本，不转换字符串，也不把非法值当作省略。 */
+export function requireExpectedStamp(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+    throw new CognitionError('invalid', 'expectedStamp 必须是正安全整数。');
+  }
+  return value;
+}
+
 /**
  * 校验目标后调用单树事务，保留业务错误；异常的存储失败不对外报告成功。
  * @param store 负责提交与回滚的树存储
  * @param treeId 唯一目标树，不回退到其他树
  * @param mode 修改/确认要求已有树；新建或自举要求目标树尚不存在
  * @param work 只在该事务内读取域事实并写入明示的变更
+ * @param expectedStamp 仅新增分支、节点决定可指定；版本比对由存储在事务内完成
  * @returns 端口完成提交后的工作结果
  */
 async function write<T>(
   store: TreeStore, treeId: TreeId, mode: 'existing' | 'createNew',
   work: (transaction: WriteTransaction) => T | Promise<T>,
+  expectedStamp?: number,
 ): Promise<T> {
   if (!isNonBlank(treeId)) throw new CognitionError('invalid', '目标树 ID 不能为空白');
   try {
-    return await store.transact(treeId, mode, work);
+    if (expectedStamp === undefined) return await store.transact(treeId, mode, work);
+    requireExpectedStamp(expectedStamp);
+    if (mode !== 'existing' || !store.transactAtStamp) {
+      throw new CognitionError('invalid', '当前树存储不支持带 expectedStamp 的写入，本次未保存。');
+    }
+    return await store.transactAtStamp(treeId, expectedStamp, work);
   } catch (error) {
     if (error instanceof CognitionError) throw error;
     throw new CognitionError('storage', '保存树失败，本次写入未提交');

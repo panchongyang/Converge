@@ -24,7 +24,26 @@ function aiCall(host, name, input) {
   return tool.execute(input, { agent: { id: session.id, session }, signal: new AbortController().signal });
 }
 
-/** 校验单根树的来源与确认语义，创建者的身份不能由请求参数指定。@param detail readNode 结果 @param id 根 ID @param by 执行者 */
+/**
+ * 用 read_view 的详情模式读取单个判断；AI 单点入口已撤，正文只能随视图返回。
+ * @param host 隔离宿主 @param treeId 目标树 @param nodeId 目标节点
+ * @returns 该节点的 NodeDetail
+ */
+async function aiReadDetail(host, treeId, nodeId) {
+  const page = await aiCall(host, 'read_view', {
+    ...readViewInput(treeId),
+    focus: nodeId,
+    expand: { subtreeDepth: 0, jumpHops: 0, direction: 'out', jumpFrom: 'anchor', afterJumpDepth: 0 },
+    onLimit: 'exact',
+    includeDetails: true,
+  });
+  const node = page.nodes.find(item => item.id === nodeId);
+  assert(node?.detail, `read_view 未返回 ${nodeId} 的详情`);
+  assert(page.nodes.every(item => item.detail), '详情模式有节点缺少 detail');
+  return node.detail;
+}
+
+/** 校验单根树的来源与确认语义，创建者的身份不能由请求参数指定。@param detail 详情结果 @param id 根 ID @param by 执行者 */
 function assertNewRoot(detail, id, by) {
   const { node, currentChange } = detail;
   assert(node.id === id && node.parentId === null && node.state === 'open', '根节点位置或状态不符');
@@ -75,7 +94,7 @@ export async function runBusiness(host) {
     report.business.database = { path: disk(treeId), bytes: statSync(disk(treeId)).size };
     const duplicate = await uiCall(host, 'createTree', { treeId, rootQuestion: '不可覆盖原问题' });
     assert(duplicate.status === 400 && duplicate.body.error.code === 'invalid', '同 ID 未被拒绝');
-    const read = await aiCall(host, 'read_node', { treeId, nodeId: treeId });
+    const read = await aiReadDetail(host, treeId, treeId);
     assertNewRoot(read, treeId, 'human');
     assert(read.node.body.title === rootQuestion, '同名创建覆盖了根问题');
     return report.business.database;
@@ -85,7 +104,7 @@ export async function runBusiness(host) {
     const other = `${treeId}-ai`;
     const result = await aiCall(host, 'create_tree', { treeId: other, rootQuestion: '另一棵树的问题' });
     assert(result === other && existsSync(disk(other)), '第二棵树没有独立落盘');
-    assertNewRoot(await aiCall(host, 'read_node', { treeId: other, nodeId: other }), other, 'ai');
+    assertNewRoot(await aiReadDetail(host, other, other), other, 'ai');
     const page = await aiCall(host, 'read_view', readViewInput(other));
     assert(page.complete && page.nodes.length === 1 && page.refs.length === 0, '新树夹带额外分支或引用');
   });
@@ -102,7 +121,29 @@ export async function runBusiness(host) {
     return { sameWorkspace: rows.length, otherWorkspace: 0 };
   });
 
-  await check('business.tools-read', '七个 AI 工具支持建树、维护与查询', async () => {
+  await check('business.process', '过程材料可按 ID 续读，不进入正式读面或变更树版本', async () => {
+    const text = '还没形成判断的过程材料（隔离）';
+    const input = { treeId, action: { kind: 'save', text } };
+    const saved = await aiCall(host, 'process', input);
+    assert(saved.treeId === treeId && /^[0-9a-f]{64}$/.test(saved.processId) && !('text' in saved), '保存须返回定位符而不是回显正文');
+    const retry = await aiCall(host, 'process', input);
+    assert(retry.processId === saved.processId, '重复保存同一材料的 ID 不一致');
+    const processTool = host.tools.get('cognition_tree_process');
+    const read = { treeId, action: { kind: 'read', processId: saved.processId } };
+    const readIn = session => processTool.execute(read, { agent: { id: session.id, session }, signal: new AbortController().signal });
+    const seen = await readIn(fixture.peerSession);
+    assert(seen.processId === saved.processId && seen.text === text, '同工作区新会话读不到原过程材料');
+    const other = await readIn(fixture.otherSession).then(() => 'leaked', error => error.code);
+    assert(other === 'missing', '过程材料泄露到另一工作区');
+    const view = await aiCall(host, 'read_view', readViewInput(treeId));
+    const history = await aiCall(host, 'read_history', { treeId, limit: 20 });
+    const pending = await aiCall(host, 'read_unconfirmed', { treeId, by: ['human', 'ai'], limit: 20 });
+    assert(view.stamp === 1 && view.nodes.length === 1 && history.items.length === 1 && pending.items.length === 1,
+      '过程材料影响了正式读面');
+    return { idLength: saved.processId.length, stamp: view.stamp };
+  });
+
+  await check('business.tools-read', '树工具支持建树、维护与查询', async () => {
     const start = performance.now();
     const view = await aiCall(host, 'read_view', readViewInput(treeId));
     assert(view.rootId === treeId && view.focusId === treeId && view.stamp === 1, '初版根或版本不符');
@@ -110,7 +151,7 @@ export async function runBusiness(host) {
     const id = await aiCall(host, 'add_branch', { treeId, placement: { parentId: treeId, kind: 'branch' },
       draft: { body: { title: 'AI 验证分支' }, state: 'open', refs: [] } });
     report.business.branchId = id;
-    const detail = await aiCall(host, 'read_node', { treeId, nodeId: id });
+    const detail = await aiReadDetail(host, treeId, id);
     assert(detail.node.body.title === 'AI 验证分支', '新增判断标题不符');
     const decided = await aiCall(host, 'decide_node', { treeId, nodeId: id,
       decision: { type: 'prune', reason: '隔离检查', reviveWhen: '有新证据' } });

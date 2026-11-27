@@ -46,8 +46,8 @@
 | `addBranch(treeId, placement, draft) → NodeId` | 人的详情页或 AI 工具；placement 定落点，draft 给出新判断。人侧 UI 首版只提供子判断、补充、勘误三种落点，不提供登记替代候选的入口；这是界面范围，内核对两种 actor 的规则相同。 | 分配新 ID，节点提交即存在。登记同级候选不剪旧节点；须显式执行替代。 |
 | `decideNode(treeId, nodeId, decision) → NodeId` | 人的详情页或 AI 工具；nodeId 指被操作的节点，decision 是下表的一项。 | 执行日常变更，返回被操作节点的原 ID；记形成，不自动确认。 |
 | `confirm(treeId, target: ConfirmTarget) → RevisionId` | **仅人**；target 是明确展示、由人确认的变更或自举判断，取自 `readNode` 带回的当前变更或 `readUnconfirmed` 的一项。 | 返回新确认记录 ID。只记人确认，不增节点、不改分支状态、不执行替代。 |
-| `readView(treeId, focus, expand, budget, onLimit, cursor?) → TreeView` | 人或 AI；focus 是节点 ID 或显式选择树根。 | 各参数、完整性和续读见 3.2；不写时间线。 |
-| `readNode(treeId, nodeId) → NodeDetail` | 人或 AI；nodeId 指要读的判断。 | 取指定节点的正文、状态、确认信息，以及 `currentChange` 所指那条形成记录的全文，人在确认前据此看清这次变更做了什么；没有日常变更的导入判断不带这一项。邻居用 `readView`，其余历史用 `readHistory`。 |
+| `readView` 的具名参数 `{treeId, focus, expand, budget, onLimit, includeDetails?, cursor?}` → `TreeView` | 人或 AI；focus 是节点 ID 或显式选择树根。 | `includeDetails: true` 随页带出详情；缺省或 `false` 只读轻行。各参数、完整性和续读见 3.2；不写时间线。 |
+| `readNode(treeId, nodeId) → NodeDetail` | 宿主的人侧详情栏；nodeId 指当前所选判断。DSH 的 AI 工具通过 `readView` 的详情模式读取。 | 取指定节点的正文、状态、确认信息，以及 `currentChange` 所指那条形成记录的全文，人在确认前据此看清这次变更做了什么；没有日常变更的导入判断不带这一项。邻居用 `readView`，其余历史用 `readHistory`。 |
 | `readHistory(treeId, {nodeId?, limit, after?}) → Page<Revision>` | 人或 AI；limit 是页条数，after 是上一页末项。 | 按关联 ID 查节点历史；不传 nodeId 按树查，不传 after 从最近一页开始。 |
 | `readUnconfirmed(treeId, {by, limit, after?}) → Page<PendingTarget>` | 人或 AI；by 是要列出的执行者种类，limit 是页条数，after 是上一页末项。人侧 UI 的待确认列表传 `by: [ai, import]`，人自己执行的变更不列入。 | 列出尚无人确认的目标，每项都可直接交给 `confirm`；各项的定义与顺序见下文“确认如何绑定”。只按未确认索引分页，不扫描全表，不做全量计数。 |
 | `bootstrapTree(seed: SeedTree) → TreeId` | 供显式的隔离样例与历史种子使用，非工作区建树入口；DSH 不向人侧路由或 AI 工具开放该操作。 | 一次提交创建目标树。已存在报 `invalid`，不覆盖；导入不是确认。详见 3.4。 |
@@ -79,7 +79,9 @@
 | `jumpFrom` | `anchor` 仅从本轮起点跳；`expanded` 可从本轮起点及其按深度展开的子节点跳。首轮起点为焦点，下一轮起点为每个引用落点。 |
 | `afterJumpDepth` | **每次**落点再向下展开的深度；0 只命中落点。与 subtreeDepth 同单位，独立生效。补进视图的连接祖先不是新的起跳点。 |
 
-**结果是一棵树，不是遍历路径列表。** 拟返回 `TreeView {rootId, focusId, nodes, refs, boundaries, complete, stamp, cursor?}`。nodes 是可绘制的节点行（ID、真实父 ID、标题、分支状态、`currentChange`、`confirmation`、命中或仅连接）；执行者和确认分别可读，长正文按需取。每次成功返回包含原根、焦点及连接所需的父链；剪枝、未确认不让结构断开。树内引用两端都能定位，外部引用返回出处。节点按稳定 ID 去重，引用按边 ID 去重：两个不同的引用碰到同一节点，仍是两条边。遇环不反复走相同的展开状态；若同一节点通过另一条路径获得更多剩余深度或跳数，仍补足未覆盖的范围。
+**结果是一棵树，不是遍历路径列表。** `TreeView {rootId, focusId, nodes, refs, boundaries, complete, stamp, cursor?}` 中，`nodes` 默认只带轻行（ID、真实父 ID、标题、分支状态、`currentChange`、`confirmation`、命中或仅连接等）。每次成功返回包含原根、焦点及连接所需的父链；剪枝、未确认不让结构断开。树内引用两端都能定位，外部引用返回出处。节点按稳定 ID 去重，引用按边 ID 去重：两个不同的引用碰到同一节点，仍是两条边。遇环不反复走相同的展开状态；若同一节点通过另一条路径获得更多剩余深度或跳数，仍补足未覆盖的范围。
+
+**随页读详情。** 调用方可显式传 `includeDetails: true`，内核给本页每个节点（含仅连接的父链节点）附上 `detail: NodeDetail`，值与同快照下 `readNode` 的结果一致。返回完整正文和当前形成记录，不截断、不附加其余修订历史，也不扩大引用范围。DSH 工具的详细页直出 JSON；省略参数或传 `false` 保持轻量格式。
 
 例如原树有 `R→A→C` 和 `R→B→Y` 两段父子链；C 是勘误，引用为 `C→Y`，Y 又引用 Z。以下读法命中 A、C、Y；R、B 只为还原父链。Y 仍在 B 下，既不挂到 C 下，也不带出 Z 或 B 的其他孩子。只把 jumpFrom 改成 anchor，A 自身没有出边，本次就不会命中 Y。
 
@@ -87,7 +89,7 @@
 {"subtreeDepth":1,"jumpHops":1,"direction":"out","jumpFrom":"expanded","afterJumpDepth":0}
 ```
 
-**范围不等于预算。** 一跳可能有十万条入边。拟由调用方传 `budget {maxScans, maxNodes, maxBytes}`：依次约束本次实际检查的邻接行和查找、返回节点数、序列化响应字节（含引用和折叠标记）。正有限值，不接受“无限预算”；具体数值留给负载实测。先按索引游标分批取相邻项，再扩展；空查、重复命中、向前探一条、连接父链也计费。不能先取出全部入边再去重、排序、截断；按稳定键顺序推进，不为显示“还有多少”做全量计数。遍历不读长正文；取节点行时先核对需要返回的大小。本契约约束操作量与输出量，不承诺与磁盘、缓存或树高无关的固定毫秒数。
+**范围不等于预算。** 调用方传 `budget {maxScans, maxNodes, maxBytes}`：依次约束本页实际检查的邻接行与查找、返回节点数和序列化响应字节。三项均为正安全整数。按稳定键取邻接行并逐步扩展，不先取齐入边再截断；空查、重复命中、向前探一条、连接父链也计费。只有详细模式对待投影的行查正文和当前形成记录，两种查找均计扫描，详情计入最终响应的 UTF-8 字节预算。预算约束操作量与输出量，不承诺固定耗时。
 
 | 读到的边界 | 返回约定 |
 | --- | --- |
@@ -97,7 +99,7 @@
 
 遍历或投影超限时，`rangeTooLarge` 指出已经碰到的预算项。在本次已读结果足以确定输出字节下界时，说明至少需要多少 UTF-8 字节；下界可能小于读完所需预算，也不额外扫描来估算。
 
-每次读基于同一已提交版本（stamp）。续读用同一查询和版本的游标，保存遍历位置、已展开状态和待连回的路径；每批本身仍成树，调用方按 ID 合并。实现提案是只在连续读取期间短暂保留读快照，读完、取消或到期即释放；若游标到期，明确报 `viewExpired`，可从折叠点发起新读，不把两个版本拼成一个。第一次调用不传 cursor；续读仍有独立预算。
+续读使用同一已提交版本（`stamp`）的快照：原样传回上一页的 `cursor`，保持树、焦点、展开范围、超限策略与详情模式不变，预算可按本页重新给出。每页本身仍成树，调用方按 ID 合并。游标仅短暂有效，过期报 `viewExpired`；可从折叠点发起新读，但不把两个版本拼成一个。第一次调用不传 `cursor`。
 
 ### 3.3 增量持久化与四个端口（提案）
 

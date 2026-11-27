@@ -5,8 +5,9 @@
 import { Worker } from 'node:worker_threads';
 import type { OpInput, OpName, OpOutput } from '@cognition-tree/kernel/catalog/contracts';
 import { CognitionError, type DailyActor } from '@cognition-tree/kernel/types';
-import type { CommitNotice, Reply, Request } from './protocol';
+import type { CommitNotice, ProcessInput, Reply, Request } from './protocol';
 import type { WorkspaceTreeDirectory } from '../../types/wire';
+import type { ProcessRecord } from '../storage/process';
 
 export interface Backend {
   /**
@@ -19,13 +20,16 @@ export interface Backend {
   call<K extends OpName>(root: string, actor: DailyActor, op: K, input: OpInput[K]): Promise<OpOutput[K]>;
   /** 只读当前工作区已提交树的根问题目录，不分派领域意图或发布提交通知。@param root 宿主解析的工作区绝对路径。 */
   listTrees(root: string): Promise<WorkspaceTreeDirectory>;
+  /** 保存或点读独立过程材料；不调用认知树写命令。 */
+  process(root: string, input: ProcessInput): Promise<ProcessRecord>;
   /** 订阅已提交的通知；listener 失败不会改变写入结果。返回取消订阅函数。 */
   watch(listener: (root: string, change: CommitNotice) => void): () => void;
   /** 停止接收请求、等待已接收请求结束并释放线程；可重复调用。 */
   close(): Promise<void>;
 }
 type Waiter = { resolve: (value: unknown) => void; reject: (error: Error) => void };
-type RequestInput = Omit<Extract<Request, { kind: 'call' }>, 'id'> | Omit<Extract<Request, { kind: 'listTrees' }>, 'id'>;
+type WithoutId<T> = T extends { id: number } ? Omit<T, 'id'> : never;
+type RequestInput = WithoutId<Request>;
 
 /** 装配一个惰性线程客户端。@param workerURL 同一构建产物中的线程入口；测试可指向隔离夹具。 */
 export function createBackend(workerURL = new URL('./worker.js', import.meta.url)): Backend {
@@ -87,6 +91,9 @@ export function createBackend(workerURL = new URL('./worker.js', import.meta.url
     },
     listTrees(root) {
       return request<WorkspaceTreeDirectory>({ kind: 'listTrees', root });
+    },
+    process(root, input) {
+      return request<ProcessRecord>({ kind: 'process', root, input });
     },
     watch(listener) {
       if (closed) return () => {};

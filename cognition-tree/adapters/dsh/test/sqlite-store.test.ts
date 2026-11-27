@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createKernel } from '@cognition-tree/kernel/catalog';
 import type { CognitionNode, FormationRevision, ImportedRevision, ReadSnapshot, Revision, WriteTransaction } from '@cognition-tree/kernel/types';
+import { parseAiInput } from '../src/server/host/input';
 import { SqliteTreeStore } from '../src/server/storage';
 import { Connection } from '../src/server/storage/connection';
 import { idKey, timeKey } from '../src/server/storage/order-keys';
@@ -395,6 +396,42 @@ describe('SQLite 文件边界与事务', () => {
 });
 
 describe('SQLite 自然序、真实时间、确认与增量查询', () => {
+  it('真实内核按当前视图版本写入；过期新增与决定不改树、历史或通知', async () => {
+    const { storage, changes } = observe(workspace());
+    const kernel = createKernel({ store: storage, clock: { now: () => at } });
+    const treeId = 'T1';
+    await kernel.dispatch('ai', 'createTree', { treeId, rootQuestion: '从当前树判断' });
+    const view = () => kernel.dispatch('ai', 'readView', {
+      treeId, focus: { root: true },
+      expand: { subtreeDepth: 'leaf', jumpHops: 0, direction: 'out', jumpFrom: 'anchor', afterJumpDepth: 0 },
+      budget: { maxScans: 100, maxNodes: 10, maxBytes: 8000 }, onLimit: 'exact', includeDetails: true,
+    });
+    const history = () => kernel.dispatch('ai', 'readHistory', { treeId, limit: 10 });
+    const add = { treeId, placement: { parentId: treeId, kind: 'branch' }, draft: { body: { title: '新分支' }, state: 'open', refs: [] } };
+    const { stamp: expectedStamp } = await view();
+    const nodeId = await kernel.dispatch('ai', 'addBranch', parseAiInput('addBranch', { ...add, expectedStamp }));
+    const before = await view();
+    const beforeHistory = await history();
+    const decide = { treeId, nodeId, decision: { type: 'setOpenOrKeep', state: 'keep', reason: '已核对' } };
+    const stale = { code: 'invalid', message: /重新读取.*重新判断/ };
+    expect(before.stamp).toBe(expectedStamp + 1);
+    expect(beforeHistory.items).toHaveLength(2);
+    await expect(kernel.dispatch('ai', 'addBranch', parseAiInput('addBranch', { ...add, expectedStamp }))).rejects.toMatchObject(stale);
+    await expect(kernel.dispatch('ai', 'decideNode', parseAiInput('decideNode', { ...decide, expectedStamp })))
+      .rejects.toMatchObject(stale);
+    expect(() => parseAiInput('createTree', { treeId, rootQuestion: '非已有树写入', expectedStamp })).toThrow();
+    expect(await view()).toEqual(before);
+    expect(await history()).toEqual(beforeHistory);
+    expect(changes.map(({ stamp }) => stamp)).toEqual([expectedStamp, before.stamp]);
+
+    const current = await view();
+    await expect(kernel.dispatch('ai', 'decideNode', parseAiInput('decideNode', { ...decide, expectedStamp: current.stamp })))
+      .resolves.toBe(nodeId);
+    expect((await kernel.dispatch('ai', 'readNode', { treeId, nodeId })).node).toMatchObject({ state: 'keep', confirmation: 'unconfirmed' });
+    expect((await history()).items).toHaveLength(3);
+    expect(changes.map(({ stamp }) => stamp)).toEqual([expectedStamp, current.stamp, current.stamp + 1]);
+  });
+
   it('按自然 ID 有界读轻行和两向引用；历史以真实时间和自然修订 ID 翻页', async () => {
     const storage = store(workspace());
     await storage.transact('T1', 'createNew', (tx) => {

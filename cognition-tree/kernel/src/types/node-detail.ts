@@ -1,5 +1,5 @@
 /**
- * 节点详情：readNode 的结果。
+ * 节点详情：readNode 的结果，也可随 readView 的节点行返回。
  *
  * 职责：把已保存节点与 currentChange 所指的形成记录全文放在一起，供人在确认前审阅。
  * 边界：只含指定节点本身，不夹带邻居或历史；currentChange 只能填新写的形成记录，

@@ -23,13 +23,13 @@ AI 选择本插件的工具 → 工具执行上下文            ├→ 按受�
 | `SqliteTreeStore(workspaceRoot, onCommit?)` | 根目录来自宿主；`openRead(treeId)` 固定已提交快照，`transact(treeId, mode, work)` 把变更与修订放在一个事务。提交后可通知 `{treeId,stamp,revisions}`。 | 遵循[内核端口](<../../kernel/src/types/ports.ts>)，身份及业务语义仍由 catalog 与模型负责。写者与读快照独立，节点、引用、修订及未确认索引都在本树主库。关闭时释放句柄。 |
 | `POST /api/cognition-tree/call` | 人侧客户端提交 `{sessionId,op,input}`，成功 `{ok:true,value}`，失败 `{ok:false,error:{code,message}}`。op/input 采用[操作契约](<../../kernel/src/catalog/contracts.ts>)。 | 只经宿主已认证的 owner 路由；sessionId 是定位符而不是调用者的文件访问授权。不从载荷取 cwd、actor 或用户身份。 |
 | `GET /api/cognition-tree/watch?sessionId=…` | SSE 建连事件 `ready` 与提交事件 `change`；UI 只订阅当前会话、当前树。 | 只在已提交后提示 UI 重读；断线不承诺补发历史。界面卸载/会话切换要解绑。 |
-| `cognition_tree_*` 工具 | 三个写意图 `create_tree`、`add_branch`、`decide_node`，四个读意图 `read_view`、`read_node`、`read_history`、`read_unconfirmed`。参数对应内核 input，结果供工具消费；写卡可带树和节点定位符。 | 工具固定 `ai`，工作区来自实际执行会话。写入沿用宿主文件策略：只读拒写，workspace-write 不能写到获准根目录之外，不开放提权参数。没有“人确认工具”、任意 SQL 或通用 patch。 |
+| `cognition_tree_*` 工具 | 三个写意图 `create_tree`、`add_branch`、`decide_node`，三个读意图 `read_view`、`read_history`、`read_unconfirmed`。节点正文只通过 `read_view` 的详情模式交给 AI；人侧详情栏通过认证 `/call` 点查。写卡可带树和节点定位符。 | 工具固定 `ai`，工作区来自实际执行会话。写入沿用宿主文件策略：只读拒写，workspace-write 不能写到获准根目录之外，不开放提权参数。没有“人确认工具”、任意 SQL 或通用 patch。 |
 | `GET /api/cognition-tree/trees?sessionId=…` | 默认首页与返回列表时，通过受信会话获取工作区目录。每个可读项只有 `rootQuestion`、`treeId`、`rootId`；不能读取的候选单列，不把部分结果误报为“没有树”。 | 仅提供给宿主已认证的人侧 UI。工作线程只从当前工作区的正式库定位真实根，不建立跨库索引、不迁移或写入任何判断；不是 AI 工具或领域变更。 |
 | 列表选树与「新建树」 | `createTree({treeId,rootQuestion})` 以人侧身份建树；AI 工具也可用同一意图建树。完成后可从根阅读，聊天卡的 `initialNodeId?` 只指定阅读位置。 | 每次建树只有一个未确认的根，ID 与树 ID 相同，形成记录保留创建者。同名拒绝而非打开或覆盖。打开已有树是只读操作；人侧和工具均不提供手稿导入。 |
 
 AI 的 `cognition_tree_read_view` 只在整项省略 `budget` 时使用默认：400 次扫描、24 个节点、4000 UTF-8 字节。显式传入须完整给出三个正安全整数。人侧 `/call` 和内核仍必须收到明确的三项预算；`focus`、`expand`、`onLimit` 没有 AI 默认。视图边界和超限反馈遵循[内核读取契约 §3.2](<kernel-interfaces.md>)。
 
-AI 工具在有界的候选页内使用 `CTV2`：缩进表示真实父链，本页共享 ID 前缀和边界，例外显式保留；每页独立可读，不依赖上一页的索引。点查仍传原 `nodeId`，从页内短写按工具说明复制拼回，不新增参数。每页超过 128 节点或 256 条引用时使用同语义的 JSON，以限制候选重排开销。worker 与宿主之间以及人侧 `/call` 保持规范 JSON 视图。工作线程用与工具正文相同的表示在投影提交前计费，`maxBytes` 不按较大的内部传输 JSON。
+`read_view` 可用 `includeDetails: true` 随页批量读取正文；详情页直接交付 JSON。需要从轻量页聚焦某个节点时，按工具说明将它的短写拼成真实 ID，作为新查询的 `focus`。轻量页默认用 `CTV2`：缩进表示真实父链，每页独立可读；超过 128 节点或 256 条引用时使用 JSON。worker 与宿主之间以及人侧 `/call` 使用规范 JSON，AI 的 `maxBytes` 按实际交付给模型的正文计费。
 
 ## 变化地图
 

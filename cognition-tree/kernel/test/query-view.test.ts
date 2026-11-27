@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createWriteModel } from '../src/models';
 import { createQueries } from '../src/queries';
 import type { Focus, Queries } from '../src/queries';
 import { MemoryTreeStore } from '../src/storage/memory';
@@ -166,6 +167,86 @@ async function collect(queries: Queries, store: MeasuredStore, focus: Focus, exp
 }
 
 afterEach(() => { vi.restoreAllMocks(); });
+
+describe('readView：随页读取完整节点详情', () => {
+  it('命中和引用补入的父链节点都与点查一致；缺省/false 不读正文或修订', async () => {
+    const { queries, store } = await example();
+    const model = createWriteModel(store, { now: () => '2026-11-24T00:00:00Z' });
+    await model.decideNode('ai', 'T', 'B', { type: 'prune', reason: '反例成立', reviveWhen: '有反证' });
+    const expand = { ...baseExpand, subtreeDepth: 1, jumpHops: 1 };
+    const light = await queries.readView('T', 'A', expand, large, 'exact', undefined, true);
+    expect(await queries.readView('T', 'A', expand, large, 'exact', undefined, true, false)).toEqual(light);
+    expect(light.nodes.every((row) => !('detail' in row))).toBe(true);
+    expect(store.fullNodes).toBe(0); expect(store.revisions).toBe(0);
+
+    const detailed = await queries.readView('T', 'A', expand, large, 'exact', undefined, true, true);
+    connected(detailed);
+    expect({ ...detailed, nodes: detailed.nodes.map(({ detail: _detail, ...row }) => row) }).toEqual(light);
+    expect(store.fullNodes).toBe(5); expect(store.revisions).toBe(1);
+    for (const row of detailed.nodes) expect(row.detail).toEqual(await queries.readNode('T', row.id));
+    expect(detailed.nodes.find((row) => row.id === 'B')).toMatchObject({ role: 'link', detail: {
+      node: { state: 'prune', pruneReason: '反例成立', reviveWhen: '有反证' },
+      currentChange: { kind: 'formation', by: 'ai', detail: { action: 'prune', reason: '反例成立' } },
+    } });
+    expect(detailed.nodes.find((row) => row.id === 'R')?.detail).not.toHaveProperty('currentChange');
+  });
+
+  it('扫描上限包含详情和当前形成记录；预算不足时不执行下一笔查找', async () => {
+    const { queries, store } = await example();
+    const model = createWriteModel(store, { now: () => '2026-11-24T00:00:00Z' });
+    await model.decideNode('ai', 'T', 'B', { type: 'setOpenOrKeep', state: 'keep', reason: '理由' });
+    await expect(queries.readView('T', 'B', baseExpand, { ...large, maxScans: 3 }, 'exact', undefined, true, true))
+      .rejects.toMatchObject({ code: 'rangeTooLarge', message: expect.stringContaining('maxScans') });
+    expect(store.scans + store.fullNodes + store.revisions).toBe(3);
+    expect(store.revisions).toBe(0);
+    expect(store.live).toBe(0);
+    const view = await queries.readView('T', 'B', baseExpand, { ...large, maxScans: 5 }, 'exact', undefined, true, true);
+    expect(view.complete).toBe(true);
+    expect(store.scans + store.fullNodes + store.revisions).toBe(8);
+    expect(store.revisions).toBe(1);
+    expect(store.reads.every(({ method }) => method !== 'in' && method !== 'out')).toBe(true);
+    await expect(queries.readView('T', 'B', baseExpand, large, 'exact', undefined, true, 'true' as never))
+      .rejects.toMatchObject({ code: 'invalid' });
+    expect(store.opens).toBe(2);
+  });
+
+  it('以实际 UTF-8 JSON 计费；续读完整节点、保持原快照并拒绝切换详情模式', async () => {
+    const text = '中文😀\\\n"'.repeat(260);
+    const { queries, store } = await fixture([
+      node('R', null),
+      { ...node('A', 'R'), body: { title: 'A', text, basis: '依据' } },
+      { ...node('B', 'R'), body: { title: 'B', text, source: '出处' } },
+    ]);
+    const model = createWriteModel(store, { now: () => '2026-11-24T00:00:00Z' });
+    await model.decideNode('ai', 'T', 'B', { type: 'setOpenOrKeep', state: 'keep', reason: '初始结论' });
+    const before = await queries.readNode('T', 'B');
+    const expand = { ...baseExpand, subtreeDepth: 'leaf' as const };
+    const full = await queries.readView('T', 'R', expand, large, 'exact', undefined, true, true);
+    const size = new TextEncoder().encode(JSON.stringify(full)).byteLength;
+    expect(await queries.readView('T', 'R', expand, { ...large, maxBytes: size }, 'exact', undefined, true, true)).toEqual(full);
+    await expect(queries.readView('T', 'R', expand, { ...large, maxBytes: size - 1 }, 'exact', undefined, true, true))
+      .rejects.toMatchObject({ code: 'rangeTooLarge', message: expect.stringContaining('maxBytes') });
+
+    const budget = { ...large, maxBytes: size - 1_200 };
+    const first = await queries.readView('T', 'R', expand, budget, 'fold', undefined, true, true);
+    expect(first.complete).toBe(false);
+    expect(first.nodes.find((row) => row.id === 'A')?.detail?.node.body.text).toBe(text);
+    expect(first.nodes.some((row) => row.id === 'B')).toBe(false);
+    await expect(queries.readView('T', 'R', expand, budget, 'fold', first.cursor, true, false))
+      .rejects.toMatchObject({ code: 'invalid' });
+    await model.decideNode('human', 'T', 'B', { type: 'prune', reason: '新的反例', reviveWhen: '补齐证据' });
+    const second = await queries.readView('T', 'R', expand, budget, 'fold', first.cursor, true, true);
+    expect(second.complete).toBe(true);
+    expect(second.stamp).toBe(first.stamp);
+    expect(second.nodes.find((row) => row.id === 'B')?.detail).toEqual(before);
+    expect((await queries.readNode('T', 'B')).node.pruneReason).toBe('新的反例');
+    for (const page of [first, second]) {
+      connected(page);
+      expect(page.nodes.every((row) => row.detail?.node.id === row.id)).toBe(true);
+      expect(new TextEncoder().encode(JSON.stringify(page)).byteLength).toBeLessThanOrEqual(budget.maxBytes);
+    }
+  });
+});
 
 describe('readView：接口单 3.2 的树形和展开语义', () => {
   it('补齐原父链，引用落点仍在 B 下，连接祖先不扩出其它分支', async () => {

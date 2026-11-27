@@ -8,7 +8,7 @@ import type {
   Placement, Revision, RevisionActor, RevisionId, SeedTree, TreeId, TreeView,
 } from '../types';
 
-/** 参数均由调用方明确给出；可省略项只用于首次读取或查询整棵树。 */
+/** 参数均由调用方明确给出；读操作的缺省行为在各参数处定义。 */
 export interface OpInput {
   /** 人与 AI 都可新建空白树；不接收种子、历史或确认字段。 */
   createTree: {
@@ -17,8 +17,20 @@ export interface OpInput {
     /** 根的问题文本，非空白，原样存为标题；根起始为未决、未经人确认。 */
     rootQuestion: string;
   };
-  addBranch: { treeId: TreeId; placement: Placement; draft: Draft };
-  decideNode: { treeId: TreeId; nodeId: NodeId; decision: Decision };
+  addBranch: {
+    treeId: TreeId;
+    placement: Placement;
+    draft: Draft;
+    /** 可选的正安全整数；取自本次判断前重新读取的同一棵树的 TreeView.stamp。 */
+    expectedStamp?: number;
+  };
+  decideNode: {
+    treeId: TreeId;
+    nodeId: NodeId;
+    decision: Decision;
+    /** 可选的正安全整数；取自本次判断前重新读取的同一棵树的 TreeView.stamp。 */
+    expectedStamp?: number;
+  };
   confirm: { treeId: TreeId; target: ConfirmTarget };
   bootstrapTree: { seed: SeedTree };
   readView: {
@@ -28,7 +40,9 @@ export interface OpInput {
     expand: Expand;
     budget: Budget;
     onLimit: 'fold' | 'exact';
-    /** 上一页的游标。续读仍须提供相同的树、范围和读取策略，预算按本页计。 */
+    /** true 时为每个返回节点附上同快照的 NodeDetail；省略或 false 保持轻量。 */
+    includeDetails?: boolean;
+    /** 上一页的游标。续读仍须保持同一棵树、范围、读取策略与详情模式，预算按本页计。 */
     cursor?: string;
   };
   readNode: { treeId: TreeId; nodeId: NodeId };

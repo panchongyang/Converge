@@ -120,14 +120,30 @@ export class SqliteTreeStore implements TreeStore {
    * @param work 在事务内读写明示行；其抛错会撤回本次全部写入
    * @returns work 返回值；提交失败时不返回成功
    */
-  async transact<T>(treeId: TreeId, mode: Mode, work: (transaction: WriteTransaction) => T | Promise<T>): Promise<T> {
+  transact<T>(treeId: TreeId, mode: Mode, work: (transaction: WriteTransaction) => T | Promise<T>): Promise<T> {
+    return this.enqueue(treeId, mode, work);
+  }
+
+  /** 使用同一写队列，只在事务读到的现有树版本匹配时执行 work。 */
+  async transactAtStamp<T>(
+    treeId: TreeId, expectedStamp: number, work: (transaction: WriteTransaction) => T | Promise<T>,
+  ): Promise<T> {
+    if (!Number.isSafeInteger(expectedStamp) || expectedStamp < 1) {
+      throw new CognitionError('invalid', 'expectedStamp 必须是正安全整数。');
+    }
+    return this.enqueue(treeId, 'existing', work, expectedStamp);
+  }
+
+  private async enqueue<T>(
+    treeId: TreeId, mode: Mode, work: (transaction: WriteTransaction) => T | Promise<T>, expectedStamp?: number,
+  ): Promise<T> {
     this.assertOpen();
     const name = databaseName(treeId);
     if (mode !== 'existing' && mode !== 'createNew') throw new CognitionError('invalid', '树存储事务模式无效');
     // Windows 大小写别名不能排进同一文件的不同写队列；树身份仍按 tree_meta 精确校验。
     const key = process.platform === 'win32' ? name.toLowerCase() : name;
     const previous = this.writeChains.get(key) ?? Promise.resolve();
-    const current = previous.then(() => this.execute(name, treeId, mode, work));
+    const current = previous.then(() => this.execute(name, treeId, mode, work, expectedStamp));
     const settled = current.then(() => undefined, () => undefined);
     this.writeChains.set(key, settled);
     void settled.then(() => { if (this.writeChains.get(key) === settled) this.writeChains.delete(key); });
@@ -163,8 +179,11 @@ export class SqliteTreeStore implements TreeStore {
    * @param treeId 工作区中的域树 ID
    * @param mode 是否自举新树
    * @param work 调用方的事务工作
+   * @param expectedStamp 可选的已有树版本条件
    */
-  private async execute<T>(name: string, treeId: TreeId, mode: Mode, work: (tx: WriteTransaction) => T | Promise<T>): Promise<T> {
+  private async execute<T>(
+    name: string, treeId: TreeId, mode: Mode, work: (tx: WriteTransaction) => T | Promise<T>, expectedStamp?: number,
+  ): Promise<T> {
     this.assertOpen();
     let connection: Connection | undefined;
     let transaction: Transaction | undefined;
@@ -181,6 +200,9 @@ export class SqliteTreeStore implements TreeStore {
       const previous = readMeta(connection, treeId);
       if (mode === 'existing' && previous === undefined) throw new CognitionError('missing', '树尚未自举');
       if (mode === 'createNew' && previous !== undefined) throw new CognitionError('invalid', '树已存在，不能重复自举');
+      if (expectedStamp !== undefined && previous?.stamp !== expectedStamp) {
+        throw new CognitionError('invalid', '树在读取后已有变更；请重新读取当前树并重新判断后再提交。');
+      }
       transaction = new Transaction(connection, this.onCommit !== undefined);
       this.writers.set(connection, transaction);
       inWork = true;

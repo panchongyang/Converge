@@ -49,15 +49,29 @@ export async function readNode(store: TreeStore, treeId: string, nodeId: string)
   return withSnapshot(store, treeId, async (snapshot) => {
     const node = await snapshot.readNode(nodeId);
     if (!node) throw new CognitionError('missing', '目标判断不存在。');
-    if (!node.currentChange) return { node };
-    const revision = await snapshot.readRevision(node.currentChange.revisionId);
-    if (!revision || revision.kind !== 'formation' || revision.by === 'import'
-      || revision.by !== node.currentChange.by
-      || !revision.detail.effects.some((effect) => effect.nodeId === nodeId)) {
-      throw new CognitionError('storage', '当前变更指针未指向该判断的日常形成记录。');
-    }
-    return { node, currentChange: revision };
+    return completeNodeDetail(snapshot, node);
   });
+}
+
+/**
+ * 点查与批量视图共同使用的详情投影；校验当前形成记录，没有指针便不读修订。
+ * @param snapshot 读到该节点的快照
+ * @param node 已经读到的完整节点
+ * @param beforeRevision 可选的预算检查；有指针时，在查找修订之前调用
+ * @throws CognitionError 当前指针缺失或指向不匹配的记录时 storage
+ */
+export async function completeNodeDetail(
+  snapshot: ReadSnapshot, node: NodeDetail['node'], beforeRevision?: () => void,
+): Promise<NodeDetail> {
+  if (!node.currentChange) return { node };
+  beforeRevision?.();
+  const revision = await snapshot.readRevision(node.currentChange.revisionId);
+  if (!revision || revision.kind !== 'formation' || revision.by === 'import'
+    || revision.by !== node.currentChange.by
+    || !revision.detail.effects.some((effect) => effect.nodeId === node.id)) {
+    throw new CognitionError('storage', '当前变更指针未指向该判断的日常形成记录。');
+  }
+  return { node, currentChange: revision };
 }
 
 /**

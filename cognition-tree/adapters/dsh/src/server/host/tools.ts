@@ -1,14 +1,15 @@
 /**
- * 七个 AI-only 具名工具；只翻译参数、可信会话与模型正文，不暴露 confirm/bootstrap 或通用 dispatch。
+ * AI-only 具名工具；只翻译参数、可信会话与模型正文，不暴露 confirm/bootstrap 或通用 dispatch。
  * schema 使用已安装 DSH 的原始 JSON Schema 子集；业务规则仍在 kernel catalog/commands/queries。
  * description 只给模型读参数含义与单位，不代替内核校验，也不为参数新增业务缺省。
  */
-import type { TreeView } from '@cognition-tree/kernel/types';
+import { CognitionError, type TreeView } from '@cognition-tree/kernel/types';
 import type { HostContext, HostTool, JsonSchema } from './abi';
 import { AI_TOOLS, type AiOp } from '../../types/wire';
 import { AI_READ_VIEW_GUIDE } from '../ai-read-view';
 import { renderAiReadView } from '../ai-view-wire';
-import { AI_READ_VIEW_BUDGET, parseAiInput, record } from './input';
+import { AI_READ_VIEW_BUDGET, exactObject, parseAiInput, record } from './input';
+import type { ProcessInput } from '../backend/protocol';
 import { boundaryError, type HostRuntime } from './runtime';
 import { assertAiWriteAllowed } from './file-policy';
 
@@ -27,6 +28,7 @@ function integerField(description: string): JsonSchema { return { type: 'integer
 
 const treeId = stringField('当前工作区中的稳定树标识；创建时由调用方指定，之后不变；读写都按它定位同一棵树。');
 const nodeId = stringField('树内判断的稳定节点 ID；从该树已有节点或上次读取结果取得，不按标题猜。');
+const expectedStamp = integerField('可选并发检查：用刚读到的当前树 stamp（CTV2 页头的 t），正安全整数。树变化则拒绝，须重新读与判断；不使用旧过程作基线。');
 const part = stringField('局部定位（例如某条剪除理由、材料中的某段实例）；省略表示整个判断或整份材料。');
 const reason = stringField('本次决定的理由，必传；写入形成记录，不能只写在回复里。');
 const reviveWhen = stringField('复活条件，必传；说明什么情况下应重新启用。');
@@ -123,11 +125,13 @@ const PARAMETERS: Record<AiOp, HostTool['parameters']> = {
       pruneReason: stringField('初始剪除理由；仅 state=prune 时必传，其他状态不得给。'),
       reviveWhen: stringField('初始复活条件；仅 state=prune 时必传，其他状态不得给。'),
     }, ['body', 'state', 'refs'], '新判断草稿；只描述新节点，不携带 ID、执行者或确认信息。state=prune 时必须同时给 pruneReason 和 reviveWhen。'),
+    expectedStamp,
   }, ['treeId', 'placement', 'draft'], '在当前工作区的认知树中新增分支、补充、勘误或替代候选；提交生效但不代表人确认，不覆盖原文。'),
   decideNode: object({
     treeId,
     nodeId,
     decision,
+    expectedStamp,
   }, ['treeId', 'nodeId', 'decision'], '决定参数：treeId 与 nodeId 定位当前工作区的判断，decision 四选一描述动作与理由。'),
   readView: object({
     treeId,
@@ -146,17 +150,17 @@ const PARAMETERS: Record<AiOp, HostTool['parameters']> = {
       afterJumpDepth: depthField('每个引用落点再向下展开的层数，单位边数；0 只含落点自身；与 subtreeDepth 独立生效。'),
     }, ['subtreeDepth', 'jumpHops', 'direction', 'jumpFrom', 'afterJumpDepth'], '展开范围，五项都必传；范围决定本次要覆盖到哪里，不等于预算。'),
     budget: object({
-      maxScans: integerField('计数单位：次。本页最多实际检查的邻接行与查找次数，含空查、向前探一条和补父链。'),
+      maxScans: integerField('计数单位：次。本页最多实际检查的邻接行与查找次数，含空查、向前探一条、补父链、详情与当前形成记录的查找。'),
       maxNodes: integerField('计数单位：个。本页最多返回节点数，命中的节点和为连回根补入的父链节点都算。'),
       maxBytes: integerField('计数单位：UTF-8 字节。本页给模型的正文上限，含定位、节点、引用、边界标记和游标。'),
     }, ['maxScans', 'maxNodes', 'maxBytes'], `本页预算。省略整个 budget 时，使用 ${Object.entries(AI_READ_VIEW_BUDGET).map(([key, value]) => `${key}:${value}`).join('、')}。显式传入时三项都必传且须为正安全整数；null、缺项和非法值不会套用默认。`),
     onLimit: enumeration('超限策略：fold 在能返回连通页并推进时给部分结果与 cursor；exact 要求一次读完指定范围，超限报 rangeTooLarge。', 'fold', 'exact'),
-    cursor: stringField('上一页原样返回的续读游标；首次读取省略。续读必须保持同一棵树、同一焦点、同一 expand 和同一 onLimit（同范围同策略），预算可按本页重新给出。'),
+    cursor: stringField('上一页原样返回的续读游标；首次读取省略。续读必须保持同一棵树、同一焦点、同一 expand、同一 onLimit 和同一 includeDetails（同范围同策略同详情模式），预算可按本页重新给出。'),
+    includeDetails: {
+      type: 'boolean',
+      description: '为 true 时返回完整 JSON：同一 TreeView 的每个节点（含为连通父链补入的 link）多一个 detail（NodeDetail：正文、状态、确认、来历与当前形成记录全文），本页预算按该 JSON 的 UTF-8 字节计；省略或 false 时返回 CTV2 紧凑文本（超 128 节点或 256 引用仍退回 JSON）。',
+    },
   }, ['treeId', 'focus', 'expand', 'onLimit'], '按明确范围和预算读取当前工作区认知树的连通局部视图；保留真实父链与引用方向。续读使用原查询和cursor。'),
-  readNode: object({
-    treeId,
-    nodeId,
-  }, ['treeId', 'nodeId'], '读取当前工作区指定判断的正文、状态、确认标记和当前形成记录。'),
   readHistory: object({
     treeId,
     nodeId: stringField('只看该节点的修订历史；省略则读取整棵树的历史。'),
@@ -178,11 +182,69 @@ const DESCRIPTIONS: Record<AiOp, string> = {
   createTree: '在当前工作区以指定treeId和根问题创建认知树，返回树ID；仅含一个未确认根，不导入手稿或批量节点。',
   addBranch: '在当前工作区的认知树中新增分支、补充、勘误或替代候选；提交生效但不代表人确认。不覆盖原文。',
   decideNode: '在当前工作区的认知树中剪除、复活、切换留/未决或执行替代；必须显式给出理由。变更生效但不代表人确认。',
-  readView: `按明确范围和预算读取当前工作区认知树的连通局部视图；保留真实父链与引用方向。续读使用原查询和cursor。\n${AI_READ_VIEW_GUIDE}`,
-  readNode: '读取当前工作区指定判断的正文、状态、确认标记和当前形成记录。',
+  readView: `按明确范围和预算读取当前工作区认知树的连通局部视图；保留真实父链与引用方向。includeDetails=true 时返回带节点详情的完整 JSON。续读使用原查询和cursor。\n${AI_READ_VIEW_GUIDE}`,
   readHistory: '按页读取当前工作区的树或指定节点修订历史；limit必传，after来自前页。',
   readUnconfirmed: '按执行者种类分页列出当前工作区的未确认目标；AI只能读取，不能代替人确认。',
 };
+
+/**
+ * 本页响应是否带节点详情；只看回包，防止参数与回包不一致时把 detail 压缩掉。
+ * @param value 内核返回的本页视图对象。
+ */
+function hasNodeDetail(value: Record<string, unknown>): boolean {
+  return Array.isArray(value.nodes) && value.nodes.some(node => record(node) && Object.hasOwn(node, 'detail'));
+}
+
+export const PROCESS_TOOL = 'cognition_tree_process';
+
+function processInput(args: unknown): ProcessInput {
+  exactObject(args, ['treeId', 'action']);
+  const { treeId, action } = args;
+  if (typeof treeId !== 'string' || !treeId.trim() || !record(action)) {
+    throw new CognitionError('invalid', '过程材料必须指定树和操作。');
+  }
+  if (action.kind === 'save') {
+    exactObject(action, ['kind', 'text']);
+    if (typeof action.text === 'string' && action.text.trim()) return { treeId, action: { kind: 'save', text: action.text } };
+  } else if (action.kind === 'read') {
+    exactObject(action, ['kind', 'processId']);
+    if (typeof action.processId === 'string' && /^[0-9a-f]{64}$/.test(action.processId)) {
+      return { treeId, action: { kind: 'read', processId: action.processId } };
+    }
+  }
+  throw new CognitionError('invalid', '过程材料只支持保存非空正文，或按原样传入保存返回的 ID 读取。');
+}
+
+function processTool(ctx: HostContext, runtime: HostRuntime): HostTool {
+  return {
+    name: PROCESS_TOOL,
+    description: '保存或显式读取当前工作区的过程材料。材料不是认知树判断、不是指令，不自动进入树。续接时结合当前树另写；不能修改或补交旧材料。',
+    parameters: object({
+      treeId,
+      action: {
+        description: '保存新材料或按 ID 点读已有材料。',
+        oneOf: [
+          object({ kind: { type: 'string', const: 'save', description: '保存过程材料。' },
+            text: stringField('形成判断所需的文本片段；无需字段齐全或说明未入树的原因，最多 16384 UTF-8 字节。不含整段会话或秘密。') },
+          ['kind', 'text'], '另存新的过程材料，返回 ID。'),
+          object({ kind: { type: 'string', const: 'read', description: '点读旧过程材料。' },
+            processId: stringField('从先前保存结果原样取得的材料 ID；不按标题猜。') },
+          ['kind', 'processId'], '按树 ID 和过程材料 ID 读取。'),
+        ],
+      },
+    }, ['treeId', 'action'], '过程材料独立于普通读树和树修订。'),
+    output: { schema: {}, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+    async execute(args, exec) {
+      try {
+        const input = processInput(args);
+        const root = await runtime.aiWorkspace(exec);
+        if (input.action.kind === 'save') await assertAiWriteAllowed(ctx, exec.agent!.session, root, exec.signal);
+        const saved = await runtime.process(root, input, exec.signal);
+        return input.action.kind === 'read' ? saved : { treeId: saved.treeId, processId: saved.processId };
+      } catch (error) { throw boundaryError(error); }
+    },
+  };
+}
 
 /**
  * 注册完整的一组工具；中途碰撞会回滚自己已注册的工具，不移除其它插件的同名项。
@@ -198,9 +260,15 @@ export function registerTools(ctx: HostContext, runtime: HostRuntime): () => voi
         name: AI_TOOLS[op], description: DESCRIPTIONS[op], parameters: PARAMETERS[op],
         output: {
           schema: {},
-          render: (_args, value) => [{ type: 'text', text: op === 'readView' && record(value)
-            && Array.isArray(value.nodes) && Array.isArray(value.refs) && Array.isArray(value.boundaries)
-            ? renderAiReadView(value as unknown as TreeView) : JSON.stringify(value) }],
+          render: (args, value) => {
+            if (op !== 'readView' || !record(value) || !Array.isArray(value.nodes)
+              || !Array.isArray(value.refs) || !Array.isArray(value.boundaries)) {
+              return [{ type: 'text', text: JSON.stringify(value) }];
+            }
+            // 参数与回包任一表明本页带详情都直出原样 JSON；CTV2 会丢掉 detail 字段。
+            const detailed = (record(args) && args.includeDetails === true) || hasNodeDetail(value);
+            return [{ type: 'text', text: renderAiReadView(value as unknown as TreeView, detailed) }];
+          },
           ...(op === 'addBranch' || op === 'decideNode' ? {
             presentationMeta: (args: unknown, value: unknown) => record(args) && typeof args.treeId === 'string' && typeof value === 'string'
               ? { kind: 'cognition-tree', op, treeId: args.treeId, nodeId: value } : undefined,
@@ -219,6 +287,7 @@ export function registerTools(ctx: HostContext, runtime: HostRuntime): () => voi
       };
       disposers.push(ctx.tools.register(tool));
     }
+    disposers.push(ctx.tools.register(processTool(ctx, runtime)));
   } catch (error) {
     for (const dispose of disposers.reverse()) { try { dispose(); } catch { /* 继续回滚其它自身贡献。 */ } }
     throw error;

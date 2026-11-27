@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createKernel } from '@cognition-tree/kernel/catalog';
 import type { OpInput, OpName, OpOutput } from '@cognition-tree/kernel/catalog/contracts';
 import { MemoryTreeStore } from '@cognition-tree/kernel/storage/memory';
-import { CognitionError } from '@cognition-tree/kernel/types';
+import { CognitionError, type NodeDetail, type TreeView, type ViewNode } from '@cognition-tree/kernel/types';
 import { createT1Seed } from '../../browser/src/fixtures/t1-seed';
 import { aiReadViewCost } from '../src/server/ai-view-wire';
 import type { Backend } from '../src/server/backend/index';
@@ -17,6 +17,7 @@ import { join } from 'node:path';
 const ROOT_A = 'D:\\isolation\\alpha';
 const ROOT_B = 'D:\\isolation\\beta';
 const INPUT = { treeId: 'T1', nodeId: 'T1.1' };
+const HISTORY_INPUT = { treeId: 'T1', limit: 5 };
 const CREATE_INPUT = { treeId: 'NewTree', rootQuestion: '我们需要对齐什么？' };
 type Call = { root: string; actor: string; op: OpName; input: OpInput[OpName] };
 
@@ -43,6 +44,10 @@ function fixture(options: { connection?: boolean; failRoute?: string } = {}) {
   const listTrees = vi.fn(async (root: string): Promise<WorkspaceTreeDirectory> => directories.get(root)!);
   const backend: Backend = {
     call: call as Backend['call'], listTrees, close,
+    process: vi.fn(async (_root, { treeId, action }) => ({
+      treeId, processId: action.kind === 'read' ? action.processId : 'a'.repeat(64),
+      text: action.kind === 'save' ? action.text : '旧过程材料',
+    })),
     watch(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   };
   const factory = vi.fn((): Backend | Promise<Backend> => backend);
@@ -64,7 +69,7 @@ function fixture(options: { connection?: boolean; failRoute?: string } = {}) {
   const session = (id: string, cwd?: string) => { const value = { id, header: cwd === undefined ? {} : { cwd } }; sessions.set(id, value); return value; };
   session('a', ROOT_A); session('b', ROOT_B);
   const exec = (id = 'a'): ToolExecution => ({ agent: { id, session: sessions.get(id)! }, signal: new AbortController().signal });
-  const invoke = (tool: string = AI_TOOLS.readNode, args: unknown = INPUT, execution = exec()) => tools.get(tool)!.execute(args, execution);
+  const invoke = (tool: string = AI_TOOLS.readHistory, args: unknown = HISTORY_INPUT, execution = exec()) => tools.get(tool)!.execute(args, execution);
   const request = (op: string, input: unknown = INPUT, extra: Record<string, unknown> = {}, sessionId = 'a') => new Request(`http://dsh.internal${CALL_PATH}`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' },
     body: JSON.stringify({ sessionId, op, input, ...extra }),
@@ -97,9 +102,10 @@ describe('DSH 插件的可信入口', () => {
     expect(inject).toEqual(['tools', 'sessions', 'workspaceRegistry']);
     expect([...f.tools.keys()]).toEqual([
       'cognition_tree_create_tree', 'cognition_tree_add_branch', 'cognition_tree_decide_node',
-      'cognition_tree_read_view', 'cognition_tree_read_node', 'cognition_tree_read_history', 'cognition_tree_read_unconfirmed',
+      'cognition_tree_read_view', 'cognition_tree_read_history', 'cognition_tree_read_unconfirmed', 'cognition_tree_process',
     ]);
-    expect(Object.values(AI_TOOLS)).toEqual([...f.tools.keys()]);
+    expect([...Object.values(AI_TOOLS), 'cognition_tree_process']).toEqual([...f.tools.keys()]);
+    expect(AI_TOOLS).not.toHaveProperty('readNode');
     expect([...f.routes.keys()]).toEqual([CALL_PATH, WATCH_PATH, TREES_PATH]);
     expect(f.factory).not.toHaveBeenCalled();
     await f.dispose();
@@ -109,13 +115,13 @@ describe('DSH 插件的可信入口', () => {
     expect(f.routes.size).toBe(0);
   });
 
-  it('七工具固定AI并由live Session与registry确定规范工作区；同树ID不串工作区', async () => {
+  it('六工具固定AI并由live Session与registry确定规范工作区；同树ID不串工作区', async () => {
     const f = fixture();
     await f.invoke();
-    await f.invoke(AI_TOOLS.readNode, INPUT, f.exec('b'));
+    await f.invoke(AI_TOOLS.readHistory, HISTORY_INPUT, f.exec('b'));
     f.session('alias', 'D:\\alias\\alpha');
-    await f.invoke(AI_TOOLS.readNode, INPUT, f.exec('alias'));
-    expect(f.calls.map(x => [x.root, x.actor, x.op])).toEqual([[ROOT_A, 'ai', 'readNode'], [ROOT_B, 'ai', 'readNode'], [ROOT_A, 'ai', 'readNode']]);
+    await f.invoke(AI_TOOLS.readHistory, HISTORY_INPUT, f.exec('alias'));
+    expect(f.calls.map(x => [x.root, x.actor, x.op])).toEqual([[ROOT_A, 'ai', 'readHistory'], [ROOT_B, 'ai', 'readHistory'], [ROOT_A, 'ai', 'readHistory']]);
     expect(f.factory).toHaveBeenCalledTimes(1);
     expect(f.listeners.size).toBe(1);
     expect(f.tools.has('cognition_tree_confirm')).toBe(false);
@@ -126,14 +132,14 @@ describe('DSH 插件的可信入口', () => {
   it('拒绝工具自报身份、路径、sessionId及伪造Session；失败不启动后台', async () => {
     const f = fixture();
     for (const extra of [{ actor: 'human' }, { cwd: ROOT_B }, { path: ROOT_B }, { workspaceRoot: ROOT_B }, { identity: 'human' }, { sessionId: 'b' }, { op: 'confirm' }]) {
-      await expect(f.invoke(AI_TOOLS.readNode, { ...INPUT, ...extra })).rejects.toMatchObject({ code: 'invalid' });
+      await expect(f.invoke(AI_TOOLS.readHistory, { ...HISTORY_INPUT, ...extra })).rejects.toMatchObject({ code: 'invalid' });
     }
-    await expect(f.invoke(AI_TOOLS.readNode, INPUT, { signal: new AbortController().signal })).rejects.toMatchObject({ code: 'invalid' });
-    await expect(f.invoke(AI_TOOLS.readNode, INPUT, { agent: { id: 'a', session: { id: 'a', header: { cwd: ROOT_B } } }, signal: new AbortController().signal })).rejects.toMatchObject({ code: 'invalid' });
+    await expect(f.invoke(AI_TOOLS.readHistory, HISTORY_INPUT, { signal: new AbortController().signal })).rejects.toMatchObject({ code: 'invalid' });
+    await expect(f.invoke(AI_TOOLS.readHistory, HISTORY_INPUT, { agent: { id: 'a', session: { id: 'a', header: { cwd: ROOT_B } } }, signal: new AbortController().signal })).rejects.toMatchObject({ code: 'invalid' });
     f.session('empty');
-    await expect(f.invoke(AI_TOOLS.readNode, INPUT, f.exec('empty'))).rejects.toMatchObject({ code: 'invalid' });
+    await expect(f.invoke(AI_TOOLS.readHistory, HISTORY_INPUT, f.exec('empty'))).rejects.toMatchObject({ code: 'invalid' });
     f.session('unregistered', 'D:\\outside');
-    await expect(f.invoke(AI_TOOLS.readNode, INPUT, f.exec('unregistered'))).rejects.toMatchObject({ code: 'invalid' });
+    await expect(f.invoke(AI_TOOLS.readHistory, HISTORY_INPUT, f.exec('unregistered'))).rejects.toMatchObject({ code: 'invalid' });
     expect(f.factory).not.toHaveBeenCalled();
     await f.dispose();
   });
@@ -409,10 +415,10 @@ describe('已提交通知和解绑', () => {
     f.connect();
     expect(f.routes.size).toBe(3);
     expect(f.tools.size).toBe(7);
-    const staleTool = f.tools.get(AI_TOOLS.readNode)!;
+    const staleTool = f.tools.get(AI_TOOLS.readHistory)!;
     const execution = f.exec();
     await f.dispose();
-    await expect(staleTool.execute(INPUT, execution)).rejects.toMatchObject({ code: 'storage' });
+    await expect(staleTool.execute(HISTORY_INPUT, execution)).rejects.toMatchObject({ code: 'storage' });
   });
 
   it('慢消费者有界断开，不抛回后台；停用不会遗留心跳', async () => {
@@ -455,6 +461,40 @@ describe('已提交通知和解绑', () => {
     await expect(f.invoke()).rejects.toMatchObject({ code: 'storage' });
     expect(f.close).toHaveBeenCalledTimes(1);
     await f.dispose();
+  });
+});
+
+describe('过程材料具名入口', () => {
+  const tool = 'cognition_tree_process';
+  const processId = 'a'.repeat(64);
+  const save = { treeId: 'T1', action: { kind: 'save', text: '未入树的原料' } };
+  const read = { treeId: 'T1', action: { kind: 'read', processId } };
+
+  it('只传宿主绑定的工作区；点读对同工作区另一会话开放，且不分派正式树操作', async () => {
+    const f = fixture();
+    try {
+      await expect(f.invoke(tool, save)).resolves.toEqual({ treeId: 'T1', processId });
+      f.session('next', 'D:\\alias\\alpha');
+      await expect(f.invoke(tool, read, f.exec('next'))).resolves.toEqual({ treeId: 'T1', processId, text: '旧过程材料' });
+      expect(f.backend.process).toHaveBeenNthCalledWith(1, ROOT_A, save);
+      expect(f.backend.process).toHaveBeenNthCalledWith(2, ROOT_A, read);
+      expect(f.calls).toEqual([]);
+      expect((await f.post('process', read)).status).toBe(400);
+    } finally { await f.dispose(); }
+  });
+
+  it('拒绝重放与自报身份；宿主只读时仍可点读，保存不会启动后台', async () => {
+    const f = fixture();
+    try {
+      f.services.set('sandboxPolicy', { resolve: () => ({ mode: 'read-only', workspaceRoot: ROOT_A }) });
+      for (const input of [save, { ...read, sessionId: 'b' }, { ...read, action: { ...read.action, publish: true } },
+        { ...read, action: { kind: 'publish', processId } }, { ...read, action: { kind: 'read', processId: '../outside' } }]) {
+        await expect(f.invoke(tool, input)).rejects.toMatchObject({ code: 'invalid' });
+      }
+      expect(f.factory).not.toHaveBeenCalled();
+      await expect(f.invoke(tool, read)).resolves.toMatchObject({ processId });
+      expect(f.backend.process).toHaveBeenCalledOnce();
+    } finally { await f.dispose(); }
   });
 });
 
@@ -609,7 +649,7 @@ describe('AI 工具实际回包', () => {
         now += 3021;
         await kernel.dispatch(i % 2 ? 'ai' : 'human', 'decideNode', { treeId, nodeId, decision: { type: 'setOpenOrKeep', state: 'keep', reason: '隔离样本的后续修订。' } });
         if (i % 3 === 0) {
-          const revisionId = (await kernel.dispatch('ai', 'readNode', { treeId, nodeId })).node.currentChange!.revisionId;
+          const revisionId = (await kernel.dispatch('human', 'readNode', { treeId, nodeId })).node.currentChange!.revisionId;
           await kernel.dispatch('human', 'confirm', { treeId, target: { revisionId } });
         }
       }
@@ -652,9 +692,17 @@ describe('AI 工具实际回包', () => {
       expect((await read(tight)).text).toBe(sample.text);
       const human = await (await f.post('readView', tight)).json();
       expect(human).toMatchObject({ ok: false, error: { code: 'rangeTooLarge' } });
-      const detail = await f.invoke(AI_TOOLS.readNode, { treeId, nodeId: leaves[0] }) as OpOutput['readNode'];
-      expect(detail.node.id).toBe(leaves[0]);
-      expect(f.tools.get(AI_TOOLS.readNode)!.output.render({}, detail)[0].text).toBe(JSON.stringify(detail));
+      const humanDetail = await kernel.dispatch('human', 'readNode', { treeId, nodeId: leaves[0] });
+      const detailInput = { treeId, focus: leaves[0], onLimit: 'exact' as const,
+        expand: { subtreeDepth: 0, jumpHops: 0, direction: 'both' as const, jumpFrom: 'anchor' as const, afterJumpDepth: 0 },
+        budget: { maxScans: 400, maxNodes: 8, maxBytes: 32000 }, includeDetails: true };
+      const detailPage = await tool.execute(detailInput, f.exec()) as OpOutput['readView'];
+      const detailNode = detailPage.nodes.find(node => node.id === leaves[0])!;
+      expect(detailNode.detail).toEqual(humanDetail);
+      expect(detailPage.nodes.every(node => node.detail !== undefined)).toBe(true);
+      const detailText = tool.output.render(detailInput, detailPage)[0].text;
+      expect(detailText).toBe(JSON.stringify(detailPage));
+      expect(detailText.startsWith('CTV2 ')).toBe(false);
 
       const withRefs = await read({ ...base, expand: { ...base.expand, jumpHops: 1 } });
       expect(withRefs.view.refs).toHaveLength(21);
@@ -706,10 +754,14 @@ describe('AI 读取预算默认值与工具说明', () => {
       });
       const query = { ...VIEW_INPUT, expand: { ...VIEW_INPUT.expand, subtreeDepth: 3 } };
 
-      /** 固定同一取证路径，按模型正文的 JSON 字节计量，不用标题长度代理上下文。@param view 读取下一页的入口。@param detail 读取候选判断详情的入口。 */
+      /**
+       * 固定同一取证路径，按模型正文的 JSON 字节计量，不用标题长度代理上下文。
+       * @param view 读取下一页的入口。
+       * @param detail 按节点 ID 读取详情的入口；AI 侧用 readView 的详情模式。
+       */
       async function replay(
         view: (cursor?: string) => Promise<OpOutput['readView']>,
-        detail: (input: OpInput['readNode']) => Promise<OpOutput['readNode']>,
+        detail: (nodeId: string) => Promise<NodeDetail>,
       ) {
         const pages: OpOutput['readView'][] = [];
         let cursor: string | undefined;
@@ -726,20 +778,33 @@ describe('AI 读取预算默认值与工具说明', () => {
         const chosen = hits.find((node) => node.title === '树 + 有类型引用边');
         expect(pure?.state).toBe('prune');
         expect(chosen?.state).toBe('keep');
-        const grounds = await Promise.all([pure!, chosen!].map(({ id }) => detail({ treeId: query.treeId, nodeId: id })));
+        const grounds = await Promise.all([pure!.id, chosen!.id].map((id) => detail(id)));
         const viewBytes = pages.reduce((n, page) => n + Buffer.byteLength(JSON.stringify(page)), 0);
         const totalBytes = grounds.reduce((n, item) => n + Buffer.byteLength(JSON.stringify(item)), viewBytes);
         return { grounds, report: { calls: pages.length + grounds.length, viewPages: pages.length, viewBytes, totalBytes } };
       }
 
+      /** AI 取单节点详情的唯一路径：以该 ID 为 focus 读详情页，不依赖已撤掉的点查工具。 */
+      async function aiDetail(nodeId: string): Promise<NodeDetail> {
+        const page = await f.invoke(AI_TOOLS.readView, {
+          treeId: query.treeId, focus: nodeId, onLimit: 'exact',
+          expand: { subtreeDepth: 0, jumpHops: 0, direction: 'both', jumpFrom: 'anchor', afterJumpDepth: 0 },
+          budget: { maxScans: 400, maxNodes: 16, maxBytes: 65536 }, includeDetails: true,
+        }) as OpOutput['readView'];
+        expect(page.nodes.every(node => node.detail !== undefined)).toBe(true);
+        const node = page.nodes.find(item => item.id === nodeId);
+        expect(node?.detail).toBeDefined();
+        return node!.detail!;
+      }
+
       // 同一快照和范围；旧形状用显式的宽字节预算装下全量标记。人侧完整投影是对照，不访问当前 DSH。
       const full = await replay(
         (cursor) => kernel.dispatch('human', 'readView', { ...query, budget: { ...DEFAULT_BUDGET, maxBytes: 8000 }, ...(cursor ? { cursor } : {}) }),
-        (input) => kernel.dispatch('human', 'readNode', input),
+        (nodeId) => kernel.dispatch('human', 'readNode', { treeId: query.treeId, nodeId }),
       );
       const compact = await replay(
         (cursor) => f.invoke(AI_TOOLS.readView, { ...query, ...(cursor ? { cursor } : {}) }) as Promise<OpOutput['readView']>,
-        (input) => f.invoke(AI_TOOLS.readNode, input) as Promise<OpOutput['readNode']>,
+        (nodeId) => aiDetail(nodeId),
       );
       expect(compact.grounds).toEqual(full.grounds);
       expect(compact.grounds[0]?.node.pruneReason).toContain('共享前提、同类实例、与事实冲突');
@@ -749,6 +814,25 @@ describe('AI 读取预算默认值与工具说明', () => {
       expect(compact.report.totalBytes).toBeLessThan(full.report.totalBytes);
       expect(f.call).toHaveBeenCalledTimes(compact.report.calls);
       console.info('T1 固定取证路径（隔离宿主；JSON UTF-8 字节）', { full: full.report, compact: compact.report });
+    } finally { await f.dispose(); }
+  });
+
+  it('撤掉 AI 单点入口后人侧 /call 的 readNode 仍读取真实内核详情', async () => {
+    const f = fixture();
+    try {
+      const kernel = createKernel({ store: new MemoryTreeStore(), clock: { now: () => '2026-11-20T00:00:00Z' } });
+      await kernel.dispatch('human', 'bootstrapTree', { seed: createT1Seed() });
+      f.call.mockImplementation(async (_root, actor, op, input) => {
+        if (actor !== 'ai' && actor !== 'human') throw new Error('隔离测试的调用身份无效');
+        return kernel.dispatch(actor, op, input);
+      });
+      const response = await f.post('readNode', { treeId: 'T1', nodeId: 'T1.1' });
+      expect(response.status).toBe(200);
+      const body = await response.json() as { ok: boolean; value?: OpOutput['readNode'] };
+      expect(body.ok).toBe(true);
+      expect(body.value?.node.id).toBe('T1.1');
+      expect(body.value?.node.body.title).toBe('对话树：按对话过程组织');
+      expect(f.call).toHaveBeenCalledWith(ROOT_A, 'human', 'readNode', { treeId: 'T1', nodeId: 'T1.1' });
     } finally { await f.dispose(); }
   });
 
@@ -801,7 +885,7 @@ describe('AI 读取预算默认值与工具说明', () => {
     return missing;
   }
 
-  it('七个工具的参数、嵌套字段与二选一分支都有中文说明，readView 合同写明单位与续读规则', async () => {
+  it('工具的参数、嵌套字段与二选一分支都有中文说明，readView 合同写明单位与续读规则', async () => {
     const f = fixture();
     for (const tool of f.tools.values()) {
       expect(tool.description).toContain('当前工作区');
@@ -822,7 +906,174 @@ describe('AI 读取预算默认值与工具说明', () => {
     expect(view.parameters.properties!.expand!.properties!.jumpHops!.description).toContain('refs/scope');
     expect(view.parameters.properties!.expand!.properties!.jumpHops!.description).toContain('不代表查尽');
     expect(view.parameters.properties!.cursor!.description).toContain('同范围同策略');
+    expect(view.parameters.properties!.cursor!.description).toContain('includeDetails');
     expect(view.parameters.properties!.cursor!.description).toContain('预算可按本页重新给出');
     await f.dispose();
+  });
+});
+
+describe('AI 详情读取的注册参数与输出', () => {
+  const VIEW_INPUT = {
+    treeId: 'T1',
+    focus: { root: true as const },
+    expand: { subtreeDepth: 'leaf' as const, jumpHops: 0, direction: 'both' as const, jumpFrom: 'anchor' as const, afterJumpDepth: 0 },
+    onLimit: 'fold' as const,
+  };
+  const DEFAULT_BUDGET = { maxScans: 400, maxNodes: 24, maxBytes: 4000 };
+  const ROOT_ID = 'node-rev-1700000000000-0000000000000001';
+  const CHILD_ID = 'node-rev-1700000001000-0000000000000001';
+  const REVISION_ID = 'rev-1700000001000-0000000000000001';
+
+  /** 详情页节点：ViewNode 加一个 NodeDetail，link 父链也带 detail。 */
+  type DetailedNode = ViewNode & { detail: NodeDetail };
+  type DetailedView = Omit<TreeView, 'nodes'> & { nodes: DetailedNode[] };
+
+  /** 一页最小详情视图；根是连通父链 link，子节点是命中。 */
+  function detailedView(): DetailedView {
+    const rootDetail: NodeDetail = {
+      node: { id: ROOT_ID, parentId: null, body: { title: '根问题' }, origin: { kind: 'branch' } },
+    };
+    const childDetail: NodeDetail = {
+      node: {
+        id: CHILD_ID, parentId: ROOT_ID, body: { title: '子判断', text: '展开正文', basis: '依据' },
+        state: 'keep', confirmation: 'humanConfirmed', origin: { kind: 'branch' },
+        currentChange: { revisionId: REVISION_ID, by: 'human' },
+      },
+      currentChange: {
+        id: REVISION_ID, kind: 'formation', at: '2026-11-20T00:00:00Z', nodeIds: [CHILD_ID],
+        summary: '人确认前的形成记录', by: 'human',
+        detail: { action: 'addBranch', effects: [{ nodeId: CHILD_ID, afterState: 'keep' }] },
+      },
+    };
+    return {
+      rootId: ROOT_ID, focusId: CHILD_ID,
+      nodes: [
+        { id: ROOT_ID, parentId: null, title: '根问题', origin: { kind: 'branch' }, role: 'link', detail: rootDetail },
+        {
+          id: CHILD_ID, parentId: ROOT_ID, title: '子判断', state: 'keep', confirmation: 'humanConfirmed',
+          origin: { kind: 'branch' }, role: 'hit', currentChange: { revisionId: REVISION_ID, by: 'human' }, detail: childDetail,
+        },
+      ],
+      refs: [], boundaries: [{ nodeId: CHILD_ID, axis: 'children', kind: 'exhausted' }], complete: true, stamp: 42,
+    };
+  }
+
+  /** 同一页去掉 detail 的普通视图，用于核对缺省表示未变。 */
+  function plainView(): TreeView {
+    return {
+      rootId: ROOT_ID, focusId: CHILD_ID,
+      nodes: [
+        { id: ROOT_ID, parentId: null, title: '根问题', origin: { kind: 'branch' }, role: 'link' },
+        {
+          id: CHILD_ID, parentId: ROOT_ID, title: '子判断', state: 'keep', confirmation: 'humanConfirmed',
+          origin: { kind: 'branch' }, role: 'hit', currentChange: { revisionId: REVISION_ID, by: 'human' },
+        },
+      ],
+      refs: [], boundaries: [{ nodeId: CHILD_ID, axis: 'children', kind: 'exhausted' }], complete: true, stamp: 42,
+    };
+  }
+
+  it('注册可选布尔 includeDetails 并原样透传，不改变默认预算与 CTV2 缺省表示', async () => {
+    const f = fixture();
+    try {
+      const tool = f.tools.get(AI_TOOLS.readView)!;
+      expect(tool.parameters.required).toEqual(['treeId', 'focus', 'expand', 'onLimit']);
+      const field = tool.parameters.properties!.includeDetails!;
+      expect(field.type).toBe('boolean');
+      expect(field.description).toContain('detail');
+      expect(field.description).toContain('CTV2');
+      expect(field.description).toContain('false');
+      expect(tool.description).toContain('includeDetails=true');
+      expect(tool.description).toContain('完整 JSON');
+      // 撤掉 AI 点查后，详情只能由 read_view 以该 ID 为 focus 取得；描述不得再提 read_node。
+      expect(tool.description).toContain('focus');
+      expect(tool.description).not.toContain('read_node');
+
+      await f.invoke(AI_TOOLS.readView, VIEW_INPUT);
+      expect(f.calls).toHaveLength(1);
+      expect(f.calls[0]!.input).not.toHaveProperty('includeDetails');
+      expect((f.calls[0]!.input as unknown as { budget: unknown }).budget).toEqual(DEFAULT_BUDGET);
+
+      f.calls.length = 0;
+      await f.invoke(AI_TOOLS.readView, { ...VIEW_INPUT, includeDetails: true });
+      expect(f.calls[0]!.input).toMatchObject({ includeDetails: true });
+      expect((f.calls[0]!.input as unknown as { budget: unknown }).budget).toEqual(DEFAULT_BUDGET);
+      await expect(f.invoke(AI_TOOLS.readView, { ...VIEW_INPUT, details: true })).rejects.toMatchObject({ code: 'invalid' });
+
+      // 白名单由人侧 /call 与 AI 工具共享；详细标记只透传，工作区与身份仍由宿主绑定。
+      const budget = { maxScans: 7, maxNodes: 2, maxBytes: 512 };
+      expect(await (await f.post('readView', { ...VIEW_INPUT, budget, includeDetails: true })).json())
+        .toEqual({ ok: true, value: 'result' });
+      expect(f.calls.at(-1)!.input).toEqual({ ...VIEW_INPUT, budget, includeDetails: true });
+    } finally { await f.dispose(); }
+  });
+
+  it('详情页按原样 JSON 输出，字节精确，link 父链的 detail 不丢', async () => {
+    const f = fixture();
+    try {
+      const view = detailedView();
+      f.call.mockResolvedValue(view as unknown as OpOutput[OpName]);
+      const args = { ...VIEW_INPUT, includeDetails: true };
+      const value = await f.invoke(AI_TOOLS.readView, args);
+      const text = f.tools.get(AI_TOOLS.readView)!.output.render(args, value)[0]!.text;
+      expect(text).toBe(JSON.stringify(view));
+      expect(Buffer.byteLength(text, 'utf8')).toBe(Buffer.byteLength(JSON.stringify(view), 'utf8'));
+      expect(text.startsWith('CTV2 ')).toBe(false);
+      const page = JSON.parse(text) as DetailedView;
+      expect(page).toEqual(view);
+      expect(page.nodes.map(node => node.role)).toEqual(['link', 'hit']);
+      expect(page.nodes[0]!.detail.node.body.title).toBe('根问题');
+      expect(page.nodes[1]!.detail.currentChange?.summary).toBe('人确认前的形成记录');
+      // 回包已带 detail 时即使参数未标详情，也不能退回丢字段的 CTV2。
+      expect(f.tools.get(AI_TOOLS.readView)!.output.render(VIEW_INPUT, value)[0]!.text).toBe(text);
+    } finally { await f.dispose(); }
+  });
+
+  it('缺省与显式 false 仍输出同一份 CTV2 文本', async () => {
+    const f = fixture();
+    try {
+      const tool = f.tools.get(AI_TOOLS.readView)!;
+      const view = plainView();
+      const omitted = tool.output.render(VIEW_INPUT, view)[0]!.text;
+      const explicitFalse = tool.output.render({ ...VIEW_INPUT, includeDetails: false }, view)[0]!.text;
+      expect(omitted.startsWith('CTV2 ')).toBe(true);
+      expect(explicitFalse).toBe(omitted);
+    } finally { await f.dispose(); }
+  });
+
+  it('真实内核详情页：命中与 link 父链都带 detail，工具按原样 JSON 交付', async () => {
+    const f = fixture();
+    try {
+      const kernel = createKernel({
+        store: new MemoryTreeStore(), aiViewCost: aiReadViewCost, clock: { now: () => '2026-11-20T00:00:00Z' },
+      });
+      await kernel.dispatch('human', 'bootstrapTree', { seed: createT1Seed() });
+      f.call.mockImplementation(async (_root, actor, op, input) => {
+        if (actor !== 'ai' && actor !== 'human') throw new Error('隔离测试的调用身份无效');
+        return kernel.dispatch(actor, op, input);
+      });
+      const tool = f.tools.get(AI_TOOLS.readView)!;
+      const args = {
+        treeId: 'T1', focus: 'T1.3.3.2',
+        expand: { subtreeDepth: 1, jumpHops: 0, direction: 'both' as const, jumpFrom: 'anchor' as const, afterJumpDepth: 0 },
+        budget: { maxScans: 500, maxNodes: 20, maxBytes: 60000 }, onLimit: 'exact' as const,
+        includeDetails: true,
+      };
+      const value = await tool.execute(args, f.exec()) as OpOutput['readView'];
+      expect(value.nodes.every(node => node.detail !== undefined)).toBe(true);
+      expect(value.nodes.some(node => node.role === 'link')).toBe(true);
+      const text = tool.output.render(args, value)[0]!.text;
+      expect(text).toBe(JSON.stringify(value));
+      expect(text.startsWith('CTV2 ')).toBe(false);
+      expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(args.budget.maxBytes);
+
+      // 同一范围不带详情时仍是轻量页和 CTV2，缺省表示不因详情模式出现而改变。
+      const compactArgs = { ...args, includeDetails: false };
+      const compact = await tool.execute(compactArgs, f.exec()) as OpOutput['readView'];
+      expect(compact.nodes.every(node => node.detail === undefined)).toBe(true);
+      const compactText = tool.output.render(compactArgs, compact)[0]!.text;
+      expect(compactText.startsWith('CTV2 ')).toBe(true);
+      expect(compactText).toBe(tool.output.render({ ...args, includeDetails: undefined }, compact)[0]!.text);
+    } finally { await f.dispose(); }
   });
 });

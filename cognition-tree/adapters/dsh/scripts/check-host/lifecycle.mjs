@@ -58,9 +58,9 @@ export async function runRegister(host) {
           descriptionChars: String(definition.description ?? '').length,
         };
       });
-      const forbidden = ['cognition_tree_confirm', 'cognition_tree_bootstrap', 'cognition_tree_bootstrap_tree']
+      const forbidden = ['cognition_tree_read_node', 'cognition_tree_confirm', 'cognition_tree_bootstrap', 'cognition_tree_bootstrap_tree']
         .filter(name => tools.get(name));
-      assert(forbidden.length === 0, `不应注册确认/自举工具：${forbidden.join(', ')}`);
+      assert(forbidden.length === 0, `不应注册单点/确认/自举工具：${forbidden.join(', ')}`);
       return { count: definitions.length, definitions, forbidden };
     });
     if (!registered.ok) fatal = '工具注册失败，跳过依赖插件的业务检查';
@@ -240,10 +240,15 @@ export async function runReload(host) {
         const execution = { agent: { id: fixture.session.id, session: fixture.session }, signal: new AbortController().signal };
         const directory = await responseJson(await dispatch(`${TREES_PATH}?sessionId=${encodeURIComponent(fixture.peerSession.id)}`));
         assert(directory.ok && directory.value.trees.length === 2 && directory.value.trees.some(row => row.treeId === fixture.treeId), '重载后另一会话未发现已有库');
-        const node = await tools.get('cognition_tree_read_node').execute(
-          { treeId: fixture.treeId, nodeId: report.business.branchId }, execution,
-        );
-        assert(node.node?.body?.title === 'AI 验证分支', `重开 readNode 标题=${node.node?.body?.title}`);
+        const detailPage = await tools.get('cognition_tree_read_view').execute({
+          ...readViewInput(fixture.treeId),
+          focus: report.business.branchId,
+          expand: { subtreeDepth: 0, jumpHops: 0, direction: 'out', jumpFrom: 'anchor', afterJumpDepth: 0 },
+          onLimit: 'exact',
+          includeDetails: true,
+        }, execution);
+        const node = detailPage.nodes.find(item => item.id === report.business.branchId);
+        assert(node?.detail?.node?.body?.title === 'AI 验证分支', `重开 readView 详情标题=${node?.detail?.node?.body?.title}`);
         const history = await tools.get('cognition_tree_read_history').execute(
           { treeId: fixture.treeId, limit: 50 }, execution,
         );
@@ -257,7 +262,7 @@ export async function runReload(host) {
         const view = await tools.get('cognition_tree_read_view').execute(readViewInput(fixture.treeId), execution);
         assert(view.nodes.some(item => item.id === report.business.branchId), '重开 readView 未包含 AI 分支');
         report.business.reload = {
-          nodeTitle: node.node.body.title,
+          nodeTitle: node.detail.node.body.title,
           historyItems: history.items.length,
           cursorCode: cursorError.code,
           workers: workerCount(),

@@ -93,13 +93,26 @@ export interface TreeStore {
     mode: 'existing' | 'createNew',
     work: (transaction: WriteTransaction) => T | Promise<T>,
   ): Promise<T>;
+
+  /**
+   * 可选的已有树写入护栏；在同一事务加载树后、执行 work 前比对版本，不匹配则拒绝（invalid）。
+   * 未实现此端口时，不能把带护栏的请求降级为普通写入。
+   * @param treeId 目标树
+   * @param expectedStamp 当前树读取到的正安全整数版本
+   * @param work 仅在版本匹配时执行的已有树事务
+   */
+  transactAtStamp?<T>(
+    treeId: TreeId,
+    expectedStamp: number,
+    work: (transaction: WriteTransaction) => T | Promise<T>,
+  ): Promise<T>;
 }
 
 /**
  * 一次读取所基于的已提交版本的只读快照。
  * 版本固定后数据不再变化；所有分批读按稳定键推进，分页给起点键与剩余额度，不接受裸 SQL。
  * 读节点有两条路：readNode 取含正文的完整节点，readNodeRow / listChildren 只取轻行；
- * 遍历与预算计算走后者，不因读一行标题而带出长正文。
+ * 遍历先用轻行；仅当请求详细视图时，候选路径再按同快照点查完整节点及其当前形成记录。
  * 接口单未定各分批方法的分页键编码、排序细节与 close 的异步性，这里取最小形状，实现时再定。
  */
 export interface ReadSnapshot {

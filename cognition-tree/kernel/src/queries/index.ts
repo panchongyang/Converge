@@ -25,9 +25,13 @@ export interface Queries {
    * @param budget 本页实际扫描、节点与 UTF-8 响应字节上限
    * @param onLimit fold 超限返回可续读部分，exact 超限报 rangeTooLarge
    * @param cursor 首次省略；续读原样传回，保持同一查询
-   * @param aiProjection 可信内部调用为 true 时使用 AI 投影：零跳数不重复 refs/scope，并以已注入的模型度量计费
+   * @param aiProjection 可信 AI 调用零跳数时省略 refs/scope，轻量页按注入的模型表示计费
+   * @param includeDetails 显式带出同快照的点查详情（含连接节点）；详细页按 JSON 计费
    */
-  readView(treeId: string, focus: Focus, expand: Expand, budget: Budget, onLimit: 'fold' | 'exact', cursor?: string, aiProjection?: boolean): Promise<TreeView>;
+  readView(
+    treeId: string, focus: Focus, expand: Expand, budget: Budget, onLimit: 'fold' | 'exact',
+    cursor?: string, aiProjection?: boolean, includeDetails?: boolean,
+  ): Promise<TreeView>;
   /**
    * 取节点全文和当前形成记录；不存在报 missing。
    * @param treeId 所选树 ID

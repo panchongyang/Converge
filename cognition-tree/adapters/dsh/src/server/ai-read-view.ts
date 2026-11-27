@@ -4,8 +4,9 @@
  * 职责：把内核已经算好的 `TreeView` 投影成一段自包含、可逐行阅读的文本，供模型直接阅读；
  * 不重新查询、不推导确认、不改变节点顺序语义，也不依赖上一页的回包。
  * 边界：只做无损表示；节点数超过 128 或引用数超过 256 时立即返回 `undefined`，调用方继续使用原 JSON。
- * 协作：`read_view` 工具把返回值作为文本交给模型；`read_node` 的参数不变，模型按页内桶表把短 ID
- * 拼回真实 nodeId。语法与字段含义见 `AI_READ_VIEW_GUIDE`，版本前缀为 CTV2。
+ * 详情模式（`includeDetails=true`）不经过本文件：工具直接输出内核的完整 JSON，避免把 detail 压掉。
+ * 协作：`read_view` 工具把返回值作为文本交给模型；模型按本页桶表恢复可作下次 focus 的真实 ID。
+ * 语法与字段含义见 `AI_READ_VIEW_GUIDE`，版本前缀为 CTV2。
  */
 import type { TreeView } from '@cognition-tree/kernel/types';
 
@@ -22,7 +23,7 @@ const LINK_PREFIX = '-';
  * 供 `read_view` 工具定义使用的页内语法说明。
  * 面向模型：只解释怎样读当前页、怎样把短写拼成真实 nodeId；不描述宿主或内核实现。
  */
-export const AI_READ_VIEW_GUIDE = `读取结果可能是 CTV2 紧凑文本（超 128 节点或 256 引用时退回 JSON）。每页自包含。续读用原查询和本页的 cursor；版本 t 只供核对，不传给工具。
+export const AI_READ_VIEW_GUIDE = `includeDetails 省略或 false 时，读取结果是 CTV2 紧凑文本（超 128 节点或 256 引用时退回 JSON）；includeDetails=true 时整页直接返回完整 JSON：同一 TreeView，每个节点（含为连通父链补入的 link）多一个 detail（NodeDetail：正文、状态、确认、来历与当前形成记录全文）。每页自包含。续读用原查询和本页的 cursor；版本 t 不作为读取参数；基于当前页新增或决定时可用作 expectedStamp。
 首行：CTV2 n=… r=… t=… c=0|1 p=N root=… focus=… [cursor="…"]。n/r 是节点/引用数，c=1 已覆盖请求范围，c=0 且有 cursor 表示预算先到。N 是毫秒前缀长度。
 ID 前缀：# 行给出 13 位毫秒的前 N 位，切换后续节点的前缀。不同的前缀按首次出现编号 1、2、3…；同值 # 再出现不重新编号。节点行 ID 只写后 13-N 位（沿用最近 # 行）：
   <后缀> = node-rev-<当前前缀+后缀>-0000000000000001
@@ -38,7 +39,7 @@ ID 前缀：# 行给出 13 位毫秒的前 N 位，切换后续节点的前缀�
   同名初始修订（节点 ID 去掉 node-）默认由 AI 执行；不同的修订或执行者用旁注明示，不表示人确认。
 边界：~<两字母代码>=页内序号列表，如 ~ce=1-100；c=children、r=refs，s=scope、e=exhausted、b=budget。节点不在本页时列表项用 id:<ID>。
 引用：R id="…" from=<ID> kind=p|e|c to=<ID> [part="…"]，外部材料用 doc="仓库相对定位"；方向始终 from→目标，p/e/c 表示前提/实例/冲突。
-要调用 read_node，按桶表复制拼接完整 nodeId 即可；本页没有的节点不要猜，继续 read_view。不需要额外解码工具或服务端状态。`;
+按桶表复制拼接完整 nodeId；要聚焦该节点读取正文，用它作新一次 read_view 的 focus 并传 includeDetails:true。本页没有的节点不要猜，继续 read_view。不需要额外解码工具或服务端状态。`;
 
 /** 状态原词到原词的显式表；只用于校验与解码说明，不缩写。 */
 const STATE_TEXT = { keep: 'keep', prune: 'prune', open: 'open' } as const;
