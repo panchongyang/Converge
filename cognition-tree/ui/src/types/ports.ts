@@ -48,6 +48,11 @@ export interface TreeChange {
   stamp: number;
   /** 本次提交新增的修订，从旧到新。 */
   revisions: Revision[];
+  /**
+   * 只表示这次提交改变了可见集合（归档/恢复），不携带被隐藏的节点 ID。
+   * UI 必须丢弃已读缓存并重读，否则搜索与阅读栏会继续显示已归档的内容。
+   */
+  visibilityChanged?: true;
 }
 
 /** UI 访问认知数据的唯一通道。 */
@@ -104,6 +109,47 @@ export interface TreeAccess {
   create(treeId: TreeId, rootQuestion: string): Promise<TreeId>;
 }
 
+/**
+ * 一项已归档的认知：整棵树没有 nodeId，显式归档的分支有 nodeId。
+ * 归档只隐藏子树、不删数据；恢复后仍按显式标记嵌套隐藏。
+ */
+export interface ArchiveItem {
+  /** 归档项所属的树 ID。 */
+  treeId: TreeId;
+  /** 显式归档的分支节点；缺省表示整棵树已归档。 */
+  nodeId?: NodeId;
+  /** 归档时的判断标题，只用于列表显示，不作为定位符。 */
+  title: string;
+}
+
+/** 一次归档或恢复的目标；没有 nodeId 表示整棵树。 */
+export interface ArchiveTarget {
+  treeId: TreeId;
+  nodeId?: NodeId;
+}
+
+/**
+ * 归档端口：环境（DSH）实现同源请求；独立浏览器样例不提供，UI 也不渲染归档入口。
+ * 列表与修改都以服务端读回为准，UI 不在提交前改动可见性。
+ */
+export interface ArchiveAccess {
+  /**
+   * 列出可恢复的归档项。
+   * @param treeId 省略时只列整棵已归档的树；给定时列该活动树里显式归档的分支
+   */
+  list(treeId?: TreeId): Promise<ArchiveItem[]>;
+  /**
+   * 归档一项：没有 nodeId 时归档整棵树，有 nodeId 时隐藏该判断及其整个子树。
+   * @param target 要归档的目标；成功返回时服务端已提交
+   */
+  archive(target: ArchiveTarget): Promise<void>;
+  /**
+   * 恢复一项：整树恢复，或恢复一个显式归档的分支；嵌套标记保持原样。
+   * @param target 要恢复的目标
+   */
+  restore(target: ArchiveTarget): Promise<void>;
+}
+
 /** 开发坞拿到的只读上下文：知道人正在看哪里，但不能绕过 UI 写树。 */
 export interface DockContext {
   treeId: TreeId;
@@ -132,6 +178,11 @@ export interface AppProps {
    * 顶栏显示返回入口，空状态也只提示返回；独立浏览器样例不提供，保持原样。
    */
   onBackToTrees?: () => void;
+  /**
+   * 归档与恢复端口。给了它，阅读栏才出现「归档」并在顶栏提供「已归档」；
+   * 不给时（独立浏览器样例）不渲染任何归档入口。
+   */
+  archive?: ArchiveAccess;
   /**
    * 树不存在时由人发起的一次性样例导入（独立浏览器测试专用）；不给则空状态没有导入。
    * DSH 工作区面板不提供它，运行时也不 import 任何手稿或样例数据。

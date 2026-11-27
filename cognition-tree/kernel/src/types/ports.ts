@@ -133,6 +133,12 @@ export interface ReadSnapshot {
   readNode(nodeId: NodeId): Promise<CognitionNode | null>;
 
   /**
+   * 仅点查详情使用：已读出可见节点且投影没有形成指针时，区分隐藏了形成记录与实际没有形成记录。
+   * @param nodeId 同一快照中刚读到、且投影没有 currentChange 的节点
+   */
+  hasUnprojectedCurrentChange?(nodeId: NodeId): Promise<boolean>;
+
+  /**
    * 按 ID 查轻行投影，不含正文；用于遍历时先判断是否需要继续读。
    * @param nodeId 目标节点
    * @returns 轻行；不存在时为 null

@@ -93,7 +93,7 @@ export function addBranchPlacement(parentId: NodeId, relation: BranchRelation): 
  * @param detail readNode 的结果；没有读到时为 null
  */
 export function confirmTargetOf(detail: NodeDetail | null): ConfirmTarget | null {
-  if (!detail) return null;
+  if (!detail || detail.confirmationUnavailable) return null;
   const node = detail.node;
   if (node.confirmation === 'humanConfirmed') return null;
   if (detail.currentChange) return { revisionId: detail.currentChange.id };

@@ -120,6 +120,11 @@ describe('确认目标绑定', () => {
     });
   });
 
+  it('默认视图隐藏了当前形成时，不把它错当可确认的导入判断', () => {
+    const n = node('T1.1', { confirmation: 'unconfirmed' });
+    expect(confirmTargetOf({ node: n, confirmationUnavailable: true })).toBeNull();
+  });
+
   it('已人确认或未读到节点时没有可确认目标', () => {
     expect(confirmTargetOf(detail(node('T1.1', { confirmation: 'humanConfirmed' })))).toBeNull();
     expect(confirmTargetOf(null)).toBeNull();

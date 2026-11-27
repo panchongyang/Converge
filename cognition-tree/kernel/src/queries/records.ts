@@ -49,6 +49,10 @@ export async function readNode(store: TreeStore, treeId: string, nodeId: string)
   return withSnapshot(store, treeId, async (snapshot) => {
     const node = await snapshot.readNode(nodeId);
     if (!node) throw new CognitionError('missing', '目标判断不存在。');
+    // 隐去指针不等于导入判断：不给界面凭空生成一个 seed 确认目标。
+    if (!node.currentChange && node.confirmation !== 'humanConfirmed' && await snapshot.hasUnprojectedCurrentChange?.(nodeId)) {
+      return { node, confirmationUnavailable: true };
+    }
     return completeNodeDetail(snapshot, node);
   });
 }

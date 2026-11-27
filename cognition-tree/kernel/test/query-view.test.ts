@@ -578,6 +578,27 @@ describe('readView：同版本续读、失效和有界生命周期', () => {
     expect(fresh.stamp).toBe(first.stamp + 1); expect(hitIds(fresh)).toContain('NEW');
   });
 
+  it('按树失效旧可见范围，释放快照且不影响其它树的游标', async () => {
+    const { store, queries } = await fixture([node('R', null), node('A', 'R')]);
+    await store.transact('other', 'createNew', tx => {
+      tx.writeNode(node('Q', null));
+      tx.writeNode(node('B', 'Q'));
+    });
+    const expand: Expand = { ...baseExpand, subtreeDepth: 1 };
+    const small = { ...large, maxScans: 1 };
+    const first = await queries.readView('T', 'R', expand, small, 'fold');
+    const other = await queries.readView('other', 'Q', expand, small, 'fold');
+    expect(first.cursor).toBeDefined();
+    expect(other.cursor).toBeDefined();
+
+    await queries.invalidateViews('T');
+
+    expect(store.closes).toBe(1);
+    await expect(queries.readView('T', 'R', expand, large, 'fold', first.cursor)).rejects.toMatchObject({ code: 'viewExpired' });
+    await expect(queries.readView('other', 'Q', expand, large, 'fold', other.cursor)).resolves.toMatchObject({ complete: true });
+    expect(store.opens).toBe(store.closes);
+  });
+
   it('绑定查询范围、单次消费和实例；续读预算可改变', async () => {
     const { store, queries } = await example();
     const expand: Expand = { ...baseExpand, subtreeDepth: 1, jumpHops: 1 };

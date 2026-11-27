@@ -1,0 +1,143 @@
+/**
+ * 归档列表：与目录、阅读栏使用同一套纸面、细线与字层次；不新增卡片或投影。
+ * 目录里的“已归档的树”与树视图里的“已归档的分支”共用这些类。
+ */
+.ct-arc {
+  min-width: 0;
+  color: var(--ct-ink-1);
+  font-family: var(--ct-sans);
+  font-size: var(--ct-fs-row);
+  line-height: var(--ct-lh-body);
+}
+
+.ct-arc__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ct-s3);
+}
+
+.ct-arc__title {
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-lead);
+  font-weight: 500;
+}
+
+.ct-arc__count {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-arc__desc {
+  margin-top: 2px;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+}
+
+.ct-arc__state {
+  padding: var(--ct-s4) 0;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-arc__state--error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ct-s2);
+}
+
+.ct-arc__errortitle {
+  color: var(--ct-ink-1);
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-lead);
+}
+
+.ct-arc__errordesc {
+  color: var(--ct-ink-2);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-arc__banner {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ct-s3);
+  margin: var(--ct-s2) 0;
+  padding: var(--ct-s2) var(--ct-s3);
+  border-left: 2px solid var(--ct-warn);
+  background: color-mix(in srgb, var(--ct-warn) 7%, transparent);
+  color: var(--ct-ink-2);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-arc__banner .ct-textbtn {
+  flex: none;
+  color: var(--ct-link);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-arc__empty {
+  padding: var(--ct-s3) 0;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+}
+
+.ct-arc__list {
+  margin-top: var(--ct-s2);
+  border-top: var(--ct-hair) solid var(--ct-line);
+}
+
+.ct-arc__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: var(--ct-s3);
+  padding: var(--ct-s2) var(--ct-s2);
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+}
+
+.ct-arc__name {
+  min-width: 0;
+  font-family: var(--ct-serif);
+  font-size: var(--ct-fs-body);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ct-arc__meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--ct-s2);
+  white-space: nowrap;
+}
+
+.ct-arc__id,
+.ct-arc__tree {
+  max-width: 20ch;
+  overflow: hidden;
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-id);
+  text-overflow: ellipsis;
+}
+
+.ct-arc__error {
+  margin-top: var(--ct-s2);
+  padding-left: var(--ct-s3);
+  border-left: 2px solid var(--ct-danger);
+  color: var(--ct-danger);
+  font-size: var(--ct-fs-ui);
+  line-height: var(--ct-lh-ui);
+}
+
+@media (max-width: 720px) {
+  .ct-arc__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .ct-arc__meta {
+    display: none;
+  }
+}

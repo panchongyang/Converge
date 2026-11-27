@@ -286,3 +286,54 @@ button.ct-dir__row:disabled {
     justify-self: start;
   }
 }
+
+/* —— 归档：目录行右侧动作与“已归档的树” —— */
+.ct-dir__archived {
+  margin-bottom: var(--ct-s5);
+  padding: var(--ct-s4) var(--ct-s5);
+  border: var(--ct-hair) solid var(--ct-line-strong);
+  background: var(--ct-page);
+}
+
+.ct-dir__archivedfoot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--ct-s2);
+}
+
+.ct-dir__archivedfoot .ct-textbtn {
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-dir__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ct-s3);
+  border-bottom: var(--ct-hair) solid var(--ct-line);
+}
+
+.ct-dir__item > .ct-dir__row {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.ct-dir__archive {
+  flex: none;
+  padding-right: var(--ct-s2);
+  color: var(--ct-ink-3);
+  font-size: var(--ct-fs-ui);
+}
+
+.ct-dir__archive:hover {
+  color: var(--ct-danger);
+}
+
+.ct-dir__archive:disabled {
+  color: var(--ct-ink-4);
+}
+
+.ct-dir__refresh.is-on {
+  color: var(--ct-ink-1);
+}

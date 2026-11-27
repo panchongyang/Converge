@@ -28,7 +28,8 @@ import { useHistory, useNodeDetail } from '../../models/useNodeReads';
 import { compareIds } from '../../utils/ids';
 import { confirmationLabel, confirmationView, isAiProposed, originMark, partLabel, stateLabel } from '../../utils/labels';
 import type { UiError } from '../../utils/errors';
-import { CopyId, NodeChip, NodeGlyph, OriginMark, OriginText, RefKindSample, RichText } from '../../components';
+import { Button, CopyId, NodeChip, NodeGlyph, OriginMark, OriginText, RefKindSample, RichText } from '../../components';
+import { ARCHIVE_COPY } from '../archive/model';
 import { Timeline } from '../timeline/Timeline';
 import { ConfirmControl, ConfirmPreview } from './ConfirmControl';
 import { StateControl } from './StateControl';
@@ -90,6 +91,18 @@ export interface ReaderProps {
   collapseSignal: number;
   /** 阅读栏是否有展开项（决定 Esc 先收起还是取消选中）。 */
   onExpandedChange: (has: boolean) => void;
+  /**
+   * 归档当前判断的入口；缺省表示环境没有归档能力，阅读栏不显示任何归档控件。
+   * onArchive 由 App 在服务端确认后移动选中并重读；本组件只负责确认与显示失败。
+   */
+  archiveAction?: {
+    /** 当前判断的归档请求是否在路上。 */
+    busy: boolean;
+    /** 上一次归档失败（成功后由 App 清掉）；显示在动作下方。 */
+    error: UiError | null;
+    /** 发起归档；根判断即整棵树。 */
+    onArchive: () => void;
+  };
 }
 
 /**
@@ -114,6 +127,7 @@ export function Reader(p: ReaderProps) {
   const [warn, setWarn] = useState(false);
   const [error, setError] = useState<UiError | null>(null);
   const [errorAt, setErrorAt] = useState<'writer' | 'confirm'>('writer');
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
   const warnTimer = useRef(0);
 
   const writer = p.writer && p.writer.id === id ? p.writer : null;
@@ -139,6 +153,7 @@ export function Reader(p: ReaderProps) {
     setPruneOpen(new Set());
     setError(null);
     setWarn(false);
+    setArchiveConfirm(false);
   }, [id]);
 
   // Esc 由近及远：App 在收起展开项这一层递增计数。
@@ -284,6 +299,8 @@ export function Reader(p: ReaderProps) {
             submit={submit}
             submitWriter={submitWriter}
             isRoot={isRoot}
+            archiveConfirm={archiveConfirm}
+            setArchiveConfirm={setArchiveConfirm}
             historyCount={history.items.length}
             historyHasMore={history.hasMore}
             onOpenWriter={p.onOpenWriter}
@@ -329,6 +346,8 @@ interface NodePageProps {
   submit: (write: HumanWrite) => Promise<void>;
   submitWriter: () => void;
   isRoot: boolean;
+  archiveConfirm: boolean;
+  setArchiveConfirm: (open: boolean) => void;
   historyCount: number;
   historyHasMore: boolean;
   onOpenWriter: (id: NodeId, type: WriterType, initial?: Record<string, string>) => void;
@@ -541,6 +560,58 @@ function NodePage(props: NodePageProps) {
           <button type="button" className="ct-textbtn" onClick={() => openAdd('erratum')}>
             写一句勘误…
           </button>
+          {props.p.archiveAction && (
+            <>
+              <span className="ct-reader__dot">·</span>
+              <button
+                type="button"
+                className="ct-textbtn"
+                disabled={props.p.archiveAction.busy}
+                onClick={() => props.setArchiveConfirm(true)}
+                title={
+                  isRoot
+                    ? '归档整棵树：从全部树列表移到已归档，可在目录里恢复'
+                    : '归档这个判断及其整个子树；可在「已归档」里恢复'
+                }
+              >
+                {isRoot ? ARCHIVE_COPY.archiveRoot : ARCHIVE_COPY.archiveNode}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {props.archiveConfirm && props.p.archiveAction && !writing && (
+        <div className="ct-reader__archiveconfirm" role="alert">
+          <span className="ct-reader__archivecopy">
+            {isRoot ? ARCHIVE_COPY.confirmRoot : ARCHIVE_COPY.confirmNode}
+          </span>
+          <Button
+            size="sm"
+            variant="danger"
+            loading={props.p.archiveAction.busy}
+            onClick={() => {
+              props.setArchiveConfirm(false);
+              props.p.archiveAction?.onArchive();
+            }}
+          >
+            {ARCHIVE_COPY.confirmAction}
+          </Button>
+          <button
+            type="button"
+            className="ct-textbtn"
+            disabled={props.p.archiveAction.busy}
+            onClick={() => props.setArchiveConfirm(false)}
+          >
+            {ARCHIVE_COPY.cancel}
+          </button>
+        </div>
+      )}
+
+      {props.p.archiveAction?.error && !writing && (
+        <div className="ct-reader__inlineerror" role="alert">
+          {ARCHIVE_COPY.archiveFailed}
+          {props.p.archiveAction.error.message}
         </div>
       )}
 

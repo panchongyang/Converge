@@ -17,6 +17,8 @@ export interface Kernel {
    * @returns 已提交写入的 ID，或一致读的结果；失败不返回部分提交
    */
   dispatch<K extends OpName>(actor: DailyActor, op: K, input: OpInput[K]): Promise<OpOutput[K]>;
+  /** 存储端改变返回范围后，在下一次分派前释放该树的旧游标。@param treeId 改变可见范围的树。 */
+  invalidateViews(treeId: string): Promise<void>;
 }
 
 /** 每项把其签名、权限与执行方法放在一起；类型映射保证分派后仍返回同一操作的结果。 */
@@ -57,6 +59,7 @@ export function createKernel(deps: { store: TreeStore; clock: Clock; aiViewCost?
     },
   };
   return {
+    invalidateViews: read.invalidateViews,
     async dispatch<K extends OpName>(actor: DailyActor, op: K, input: OpInput[K]): Promise<OpOutput[K]> {
       if (!Object.hasOwn(operations, op)) throw new CognitionError('invalid', `未知操作：${String(op)}`);
       const operation = operations[op];

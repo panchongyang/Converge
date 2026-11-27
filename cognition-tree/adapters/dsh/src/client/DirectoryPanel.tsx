@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TreeDirectory } from '@cognition-tree/ui/app';
 import type { NodeId, TreeId } from '@cognition-tree/kernel/types';
 import type { CognitionClient } from '@cognition-tree/ui/types/ports';
+import { createArchiveAccess } from './archive';
 import { createAndEnter } from './tree-entry';
 import { createCognitionClient } from './transport';
 import {
@@ -42,6 +43,8 @@ const INITIAL: DirectoryState = { status: 'loading', items: [], unavailable: [],
 export function DirectoryPanel(props: { sessionId: string; onEnter: (treeId: TreeId, rootId: NodeId) => void }) {
   const { sessionId, onEnter } = props;
   const client = useMemo<CognitionClient>(() => createCognitionClient({ sessionId }), [sessionId]);
+  // 归档只经当前会话的同源端口；独立浏览器没有这个面板，也不会创建该端口。
+  const archive = useMemo(() => createArchiveAccess({ sessionId }), [sessionId]);
   const [state, setState] = useState<DirectoryState>(INITIAL);
   const loadSeq = useRef(0);
   const createSeq = useRef(0);
@@ -118,6 +121,7 @@ export function DirectoryPanel(props: { sessionId: string; onEnter: (treeId: Tre
       onRefresh={refresh}
       onOpen={(item) => onEnter(item.treeId, item.rootId)}
       onCreate={create}
+      archive={archive}
     />
   );
 }

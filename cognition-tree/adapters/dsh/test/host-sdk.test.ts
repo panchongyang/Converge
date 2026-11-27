@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Backend } from '../src/server/backend/index';
 import { inject, installHost } from '../src/server/host/index';
 import type { HostContext, HostTool, JsonSchema, SessionIdentity } from '../src/server/host/abi';
-import { AI_TOOLS, CALL_PATH, TREES_PATH, WATCH_PATH, type WorkspaceTreeDirectory } from '../src/types/wire';
+import { AI_TOOLS, ARCHIVE_PATH, CALL_PATH, TREES_PATH, WATCH_PATH, type ArchiveAction, type ArchiveResult, type WorkspaceTreeDirectory } from '../src/types/wire';
 
 const SDK_ROOT = process.env.DSH_SDK_TEST_ROOT?.trim();
 const hasSdk = Boolean(SDK_ROOT && existsSync(join(SDK_ROOT, 'node_modules', '@deepseek-ai', 'dsh-client-connection', 'lib', 'index.js')));
@@ -77,7 +77,8 @@ async function embedded() {
   const listTrees = vi.fn(async (root: string): Promise<WorkspaceTreeDirectory> => ({
     trees: [{ treeId: 'T1', rootId: 'legacy-root', rootQuestion: root === 'D:\\isolated\\workspace' ? '当前工作区的根问题' : '另一工作区的根问题' }], unavailable: [],
   }));
-  const factory = vi.fn(() => ({ call: calls as Backend['call'], listTrees, close, watch: () => () => {},
+  const archive = vi.fn(async (_root: string, operation: ArchiveAction): Promise<ArchiveResult> => operation.action === 'list' ? [] : null);
+  const factory = vi.fn(() => ({ call: calls as Backend['call'], listTrees, archive, close, watch: () => () => {},
     process: async (_root, { treeId }) => ({ treeId, processId: 'a'.repeat(64), text: '隔离过程材料' }),
   } satisfies Backend));
   const session = root.sessions.create('isolated-session', { meta: { cwd: 'D:\\isolated\\workspace' } });
@@ -119,7 +120,7 @@ async function embedded() {
     return 'rejection' in admission ? new Response(null, { status: admission.rejection }) : handler.fetch(request, admission.peer);
   }
   return {
-    root, base, connection, plugin, calls, listTrees, close, factory, records, handler, request, treesRequest, dispatch, session, otherSession,
+    root, base, connection, plugin, calls, listTrees, archive, close, factory, records, handler, request, treesRequest, dispatch, session, otherSession,
     assertSupportedJsonSchema, validateJsonSchemaValue,
     async dispose() { await plugin.dispose(); await connection.dispose(); await base.dispose(); },
   };
@@ -216,6 +217,42 @@ describe.skipIf(!hasSdk)('已安装真实 DSH SDK 的无监听器嵌入契约', 
       expect(f.calls).toHaveBeenLastCalledWith('D:\\isolated\\workspace', 'human', 'confirm', { treeId: 'T1', target: { revisionId: 'r1' } });
       expect((await f.dispatch(f.request({}, f.otherSession.id))).status).toBe(200);
       expect(f.calls).toHaveBeenLastCalledWith('D:\\isolated\\other-workspace', 'human', 'confirm', { treeId: 'T1', target: { revisionId: 'r1' } });
+    } finally { await f.dispose(); }
+  });
+
+  it('归档仅从认证 owner 路由办理，未授权和伪造上下文不会触发后台', async () => {
+    const f = await embedded();
+    const branch = { action: 'archive', treeId: 'T1', nodeId: 'N2' };
+    const request = (action: Record<string, unknown>, headers: Record<string, string> = {}, sessionId = f.session.id) => new Request(
+      `http://127.0.0.1${ARCHIVE_PATH}`, { method: 'POST', headers: f.request(headers).headers,
+        body: JSON.stringify({ sessionId, ...action }) },
+    );
+    try {
+      expect(f.handler.requestBodyMode({ method: 'POST', url: new URL(`http://127.0.0.1${ARCHIVE_PATH}`) })).toBe('streaming');
+      for (const [headers, status] of [
+        [{ cookie: '' }, 401], [{ cookie: 'forged=not-a-cookie' }, 401], [{ host: 'attacker.invalid' }, 403],
+        [{ origin: 'https://attacker.invalid' }, 403], [{ 'sec-fetch-site': 'cross-site' }, 403],
+      ] as [Record<string, string>, number][]) expect((await f.dispatch(request(branch, headers))).status).toBe(status);
+      const guest = f.root.connection.createPeer({ principal: { kind: 'isolated-non-owner' } });
+      expect((await f.handler.fetch(request(branch), guest)).status).toBe(403);
+      for (const malformed of [
+        { ...branch, actor: 'human' }, { ...branch, cwd: 'D:\\isolated\\other-workspace' },
+        { ...branch, treeId: null }, { ...branch, nodeId: '' }, { action: 'list', nodeId: 'N2' }, { action: 'purge', treeId: 'T1' },
+      ]) expect((await f.dispatch(request(malformed))).status).toBe(400);
+      expect((await f.dispatch(request(branch, {}, 'missing'))).status).toBe(404);
+      expect((await f.dispatch(f.request({}, f.session.id, { op: 'archive', input: branch }))).status).toBe(400);
+      expect(f.root.tools.definitions().map(tool => tool.name)).toEqual([...Object.values(AI_TOOLS), 'cognition_tree_process']);
+      expect(f.factory).not.toHaveBeenCalled();
+
+      const applied = await f.dispatch(request(branch));
+      expect(applied.headers.get('cache-control')).toBe('no-store');
+      expect(await applied.json()).toEqual({ ok: true, value: null });
+      expect(f.archive).toHaveBeenLastCalledWith('D:\\isolated\\workspace', branch);
+      expect(await (await f.dispatch(request({ action: 'list' }, {}, f.otherSession.id))).json()).toEqual({ ok: true, value: [] });
+      expect(f.archive).toHaveBeenLastCalledWith('D:\\isolated\\other-workspace', { action: 'list' });
+      expect(await (await f.dispatch(request({ action: 'restore', treeId: 'T1' }))).json()).toEqual({ ok: true, value: null });
+      expect(f.archive).toHaveBeenLastCalledWith('D:\\isolated\\workspace', { action: 'restore', treeId: 'T1' });
+      expect(f.calls).not.toHaveBeenCalled();
     } finally { await f.dispose(); }
   });
 

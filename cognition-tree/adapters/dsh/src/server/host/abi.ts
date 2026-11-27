@@ -40,7 +40,7 @@ export interface HostTool {
   execute(args: unknown, exec: ToolExecution): Promise<unknown>;
 }
 
-/** 认证与 owner 检查属于 Connection；插件只注册三个 exact 路由，不占 /api fallback。 */
+/** 认证与 owner 检查属于 Connection；插件只注册 exact 路由，不占 /api fallback。 */
 export interface FetchRoute {
   path: string;
   methods: readonly ('GET' | 'HEAD' | 'POST')[];

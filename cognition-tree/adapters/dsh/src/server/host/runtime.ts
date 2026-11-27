@@ -9,7 +9,7 @@ import type { Backend } from '../backend/index';
 import type { ProcessInput } from '../backend/protocol';
 import type { ProcessRecord } from '../storage/process';
 import type { HostContext, SessionIdentity, ToolExecution } from './abi';
-import { AI_TOOLS, type ChangeNotice, type UiOp, type WorkspaceTreeDirectory } from '../../types/wire';
+import { AI_TOOLS, type ArchiveAction, type ArchiveResult, type ChangeNotice, type UiOp, type WorkspaceTreeDirectory } from '../../types/wire';
 import { isOp, parseInput } from './input';
 
 export type BackendFactory = () => Backend | Promise<Backend>;
@@ -115,6 +115,11 @@ export class HostRuntime {
   /** 过程材料独立于树目录和读写协议，仍共用插件停用与排空。 */
   process(root: string, input: ProcessInput, signal: AbortSignal): Promise<ProcessRecord> {
     return this.run(signal, backend => backend.process(root, input));
+  }
+
+  /** 经认证的人侧归档管理。@param root 可信工作区。@param operation 已校验的意图。@param signal 接收前可取消。 */
+  archive(root: string, operation: ArchiveAction, signal: AbortSignal): Promise<ArchiveResult> {
+    return this.run(signal, backend => backend.archive(root, operation));
   }
 
   /** 共用进行中集合与停用排空；冷加载完成前取消的请求不送入后台。@param signal 接收前取消信号。@param work 已在入口限定的后台调用。 */

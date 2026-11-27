@@ -20,11 +20,12 @@ const VIEW_TTL_MS = 60_000;
 const generation = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 let factorySequence = 0;
 /** 注册表只保存尚未完成的真实遍历状态，不把查询结果编码进游标。 */
-interface Entry { key: string; state: Traversal }
+interface Entry { treeId: string; key: string; state: Traversal }
 
 /** 视图读取器内部接口，index 还会在其它短查询入口调用 cleanup。 */
 export interface ViewReader {
   cleanup(): Promise<void>;
+  invalidate(treeId: string): Promise<void>;
   read(
     treeId: string, focus: Focus, expand: Expand, budget: Budget, onLimit: 'fold' | 'exact',
     cursor?: string, aiProjection?: boolean, includeDetails?: boolean,
@@ -61,6 +62,18 @@ export function createViewReader(store: TreeStore, aiViewCost?: ViewWireCost): V
     for (const [token, entry] of retained) {
       if (entry.state.expiresAt <= now) await release(token, entry);
     }
+  }
+
+  /**
+   * 清除该树旧可见范围的游标。宿主须与读操作串行；快照释放失败不撤销已生效的可见性变更。
+   * @param treeId 可见范围已变更的树
+   */
+  async function invalidate(treeId: string): Promise<void> {
+    const tasks: Promise<void>[] = [];
+    for (const [token, entry] of retained) {
+      if (entry.treeId === treeId) tasks.push(release(token, entry));
+    }
+    await Promise.allSettled(tasks);
   }
 
   /**
@@ -107,6 +120,7 @@ export function createViewReader(store: TreeStore, aiViewCost?: ViewWireCost): V
         }
         const snapshot = await store.openRead(treeId);
         entry = {
+          treeId,
           key,
           state: createTraversal(snapshot, focusId ?? snapshot.rootId, requestExpand, Date.now() + VIEW_TTL_MS, includeDetails),
         };
@@ -124,5 +138,5 @@ export function createViewReader(store: TreeStore, aiViewCost?: ViewWireCost): V
       active--;
     }
   }
-  return { cleanup, read };
+  return { cleanup, invalidate, read };
 }

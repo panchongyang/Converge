@@ -60,5 +60,11 @@ export function useSelection(initial: NodeId | null = null) {
     request(prev);
   }, [request]);
 
-  return { selectedId, select, back, canBack: stack.length > 0, previousId: stack[stack.length - 1] ?? null, reveal };
+  /** 清掉旧可见范围中的回退路径，保留当前选中。 */
+  const clearBack = useCallback(() => {
+    stackRef.current = [];
+    setStack(stackRef.current);
+  }, []);
+
+  return { selectedId, select, back, clearBack, canBack: stack.length > 0, previousId: stack[stack.length - 1] ?? null, reveal };
 }

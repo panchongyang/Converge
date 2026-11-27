@@ -7,7 +7,7 @@ import {
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { CognitionError } from '@cognition-tree/kernel/types';
 import { idKey } from './order-keys';
-import { APPLICATION_ID, SCHEMA_VERSION } from './schema';
+import { APPLICATION_ID, LEGACY_SCHEMA_VERSION, SCHEMA_VERSION } from './schema';
 
 const DATABASE_SUFFIX = '.sqlite';
 const SIDECARS = ['-wal', '-shm', '-journal'];
@@ -122,8 +122,10 @@ function readHeader(path: string, expected: BigIntStats, length: number): Buffer
  */
 function checkHeader(path: string, expected: BigIntStats): void {
   const bytes = readHeader(path, expected, 100);
+  // 迁移可能尚在 WAL；这里只拒绝未知主库头，事务内再核对可见版本及对应结构。
   if (bytes.length !== 100 || !bytes.subarray(0, HEADER.length).equals(HEADER)
-    || bytes.readUInt32BE(60) !== SCHEMA_VERSION || bytes.readUInt32BE(68) !== APPLICATION_ID) {
+    || (bytes.readUInt32BE(60) !== LEGACY_SCHEMA_VERSION && bytes.readUInt32BE(60) !== SCHEMA_VERSION)
+    || bytes.readUInt32BE(68) !== APPLICATION_ID) {
     throw new CognitionError('storage', '拒绝打开未知或不受支持的工作区数据库文件');
   }
 }

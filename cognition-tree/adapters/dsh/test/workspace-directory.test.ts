@@ -69,7 +69,7 @@ describe('SQLite 工作区根问题目录', () => {
     await expect(storage.listTrees()).rejects.toMatchObject({ code: 'storage' });
   });
 
-  it('从本工作区真实根按稳定 ID 排序，只点查登记和根标题', async () => {
+  it('从本工作区真实根按稳定 ID 排序，不读取分支正文或历史', async () => {
     const root = workspace();
     const writer = store(root);
     await seed(writer, 'T10', 'T10', '十号问题？');
@@ -89,7 +89,10 @@ describe('SQLite 工作区根问题目录', () => {
       unavailable: [],
     });
     expect(get.mock.calls).toEqual([
-      [SQL.treeMeta], [SQL.rootQuestion, 'imported.root'], [SQL.treeMeta], [SQL.rootQuestion, 'T10'],
+      ['PRAGMA user_version'], ['PRAGMA application_id'], [SQL.treeMeta],
+      ['SELECT 1 FROM node_archive WHERE node_id = ?', 'imported.root'], [SQL.rootQuestion, 'imported.root'],
+      ['PRAGMA user_version'], ['PRAGMA application_id'], [SQL.treeMeta],
+      ['SELECT 1 FROM node_archive WHERE node_id = ?', 'T10'], [SQL.rootQuestion, 'T10'],
     ]);
     // SQLite 可管理自己的 WAL/SHM；目录读取不改变主库或 schema，也不建立其它业务库。
     expect(files.map((file) => readFileSync(file))).toEqual(bytes);

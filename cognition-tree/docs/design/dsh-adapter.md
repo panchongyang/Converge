@@ -25,11 +25,14 @@ AI 选择本插件的工具 → 工具执行上下文            ├→ 按受�
 | `GET /api/cognition-tree/watch?sessionId=…` | SSE 建连事件 `ready` 与提交事件 `change`；UI 只订阅当前会话、当前树。 | 只在已提交后提示 UI 重读；断线不承诺补发历史。界面卸载/会话切换要解绑。 |
 | `cognition_tree_*` 工具 | 三个写意图 `create_tree`、`add_branch`、`decide_node`，三个读意图 `read_view`、`read_history`、`read_unconfirmed`。节点正文只通过 `read_view` 的详情模式交给 AI；人侧详情栏通过认证 `/call` 点查。写卡可带树和节点定位符。 | 工具固定 `ai`，工作区来自实际执行会话。写入沿用宿主文件策略：只读拒写，workspace-write 不能写到获准根目录之外，不开放提权参数。没有“人确认工具”、任意 SQL 或通用 patch。 |
 | `GET /api/cognition-tree/trees?sessionId=…` | 默认首页与返回列表时，通过受信会话获取工作区目录。每个可读项只有 `rootQuestion`、`treeId`、`rootId`；不能读取的候选单列，不把部分结果误报为“没有树”。 | 仅提供给宿主已认证的人侧 UI。工作线程只从当前工作区的正式库定位真实根，不建立跨库索引、不迁移或写入任何判断；不是 AI 工具或领域变更。 |
+| `POST /api/cognition-tree/archive` | `{sessionId, action:'list', treeId?}` 返回显式归档项：省略树 ID 时列整树，指定时列该活动树的分支；`{sessionId, action:'archive' 或 'restore', treeId, nodeId?}` 提交成功返回 `null`，省略节点 ID 时作用于整树。 | 仅已认证的同源 owner UI 使用，不是 AI 工具；会话解析与工作区规则同 `/call`。写入提交后发不含节点 ID 的可见性通知，释放该树归档前的续读游标。 |
 | 列表选树与「新建树」 | `createTree({treeId,rootQuestion})` 以人侧身份建树；AI 工具也可用同一意图建树。完成后可从根阅读，聊天卡的 `initialNodeId?` 只指定阅读位置。 | 每次建树只有一个未确认的根，ID 与树 ID 相同，形成记录保留创建者。同名拒绝而非打开或覆盖。打开已有树是只读操作；人侧和工具均不提供手稿导入。 |
 
 AI 的 `cognition_tree_read_view` 只在整项省略 `budget` 时使用默认：400 次扫描、24 个节点、4000 UTF-8 字节。显式传入须完整给出三个正安全整数。人侧 `/call` 和内核仍必须收到明确的三项预算；`focus`、`expand`、`onLimit` 没有 AI 默认。视图边界和超限反馈遵循[内核读取契约 §3.2](<kernel-interfaces.md>)。
 
 `read_view` 可用 `includeDetails: true` 随页批量读取正文；详情页直接交付 JSON。需要从轻量页聚焦某个节点时，按工具说明将它的短写拼成真实 ID，作为新查询的 `focus`。轻量页默认用 `CTV2`：缩进表示真实父链，每页独立可读；超过 128 节点或 256 条引用时使用 JSON。worker 与宿主之间以及人侧 `/call` 使用规范 JSON，AI 的 `maxBytes` 按实际交付给模型的正文计费。
+
+**归档可见性。** 整树和分支归档共用一套标记，归档与恢复不改正文、父子关系、引用或修订。日常查询在分页前过滤，引用任一端不可见时整条边省略。含隐藏结构化关联的修订也不随默认历史或详情读出。恢复上层归档不解除下层独立标记。新库使用 SQLite v2；旧库的普通读写不迁移，首次实际归档与增量格式升级同事务提交。v2 库不能由 0.4.14 打开。
 
 ## 变化地图
 

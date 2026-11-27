@@ -21,4 +21,6 @@ export interface NodeDetail {
    * 类型限定为新写形成记录，不让确认记录或导入记录填进来。
    */
   currentChange?: FormationRevision;
+  /** 点查时为 true 表示当前没有可出示的确认目标；不提供被隐藏记录的定位。 */
+  confirmationUnavailable?: true;
 }
