@@ -11,4 +11,5 @@ export const AI_TOOLS = [
   'cognition_tree_read_view',
   'cognition_tree_read_history',
   'cognition_tree_read_unconfirmed',
+  'cognition_tree_process',
 ];

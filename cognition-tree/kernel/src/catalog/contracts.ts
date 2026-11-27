@@ -17,8 +17,20 @@ export interface OpInput {
     /** 根的问题文本，非空白，原样存为标题；根起始为未决、未经人确认。 */
     rootQuestion: string;
   };
-  addBranch: { treeId: TreeId; placement: Placement; draft: Draft };
-  decideNode: { treeId: TreeId; nodeId: NodeId; decision: Decision };
+  addBranch: {
+    treeId: TreeId;
+    placement: Placement;
+    draft: Draft;
+    /** 可选的正安全整数；取自本次判断前重新读取的同一棵树的 TreeView.stamp。 */
+    expectedStamp?: number;
+  };
+  decideNode: {
+    treeId: TreeId;
+    nodeId: NodeId;
+    decision: Decision;
+    /** 可选的正安全整数；取自本次判断前重新读取的同一棵树的 TreeView.stamp。 */
+    expectedStamp?: number;
+  };
   confirm: { treeId: TreeId; target: ConfirmTarget };
   bootstrapTree: { seed: SeedTree };
   readView: {

@@ -44,6 +44,10 @@ function fixture(options: { connection?: boolean; failRoute?: string } = {}) {
   const listTrees = vi.fn(async (root: string): Promise<WorkspaceTreeDirectory> => directories.get(root)!);
   const backend: Backend = {
     call: call as Backend['call'], listTrees, close,
+    process: vi.fn(async (_root, { treeId, action }) => ({
+      treeId, processId: action.kind === 'read' ? action.processId : 'a'.repeat(64),
+      text: action.kind === 'save' ? action.text : '旧过程材料',
+    })),
     watch(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   };
   const factory = vi.fn((): Backend | Promise<Backend> => backend);
@@ -98,9 +102,9 @@ describe('DSH 插件的可信入口', () => {
     expect(inject).toEqual(['tools', 'sessions', 'workspaceRegistry']);
     expect([...f.tools.keys()]).toEqual([
       'cognition_tree_create_tree', 'cognition_tree_add_branch', 'cognition_tree_decide_node',
-      'cognition_tree_read_view', 'cognition_tree_read_history', 'cognition_tree_read_unconfirmed',
+      'cognition_tree_read_view', 'cognition_tree_read_history', 'cognition_tree_read_unconfirmed', 'cognition_tree_process',
     ]);
-    expect(Object.values(AI_TOOLS)).toEqual([...f.tools.keys()]);
+    expect([...Object.values(AI_TOOLS), 'cognition_tree_process']).toEqual([...f.tools.keys()]);
     expect(AI_TOOLS).not.toHaveProperty('readNode');
     expect([...f.routes.keys()]).toEqual([CALL_PATH, WATCH_PATH, TREES_PATH]);
     expect(f.factory).not.toHaveBeenCalled();
@@ -266,7 +270,7 @@ describe('工作区根问题只读目录', () => {
     expect(f.factory).toHaveBeenCalledOnce();
     expect(f.call).not.toHaveBeenCalled();
     expect((await f.post('listTrees', {})).status).toBe(400);
-    expect(f.tools.size).toBe(6);
+    expect(f.tools.size).toBe(7);
     expect(f.tools.has('cognition_tree_list_trees')).toBe(false);
     await f.dispose();
   });
@@ -313,7 +317,7 @@ describe('工作区根问题只读目录', () => {
   it('第三条路由注册失败只回滚本次已注册路由，不卸工具或启动后台', async () => {
     const f = fixture({ failRoute: TREES_PATH });
     expect(f.routes.size).toBe(0);
-    expect(f.tools.size).toBe(6);
+    expect(f.tools.size).toBe(7);
     expect(f.warn).toHaveBeenCalledOnce();
     expect(f.factory).not.toHaveBeenCalled();
     await f.dispose();
@@ -410,7 +414,7 @@ describe('已提交通知和解绑', () => {
     expect((await staleRoute.fetch(f.request('readNode'))).status).toBe(503);
     f.connect();
     expect(f.routes.size).toBe(3);
-    expect(f.tools.size).toBe(6);
+    expect(f.tools.size).toBe(7);
     const staleTool = f.tools.get(AI_TOOLS.readHistory)!;
     const execution = f.exec();
     await f.dispose();
@@ -457,6 +461,40 @@ describe('已提交通知和解绑', () => {
     await expect(f.invoke()).rejects.toMatchObject({ code: 'storage' });
     expect(f.close).toHaveBeenCalledTimes(1);
     await f.dispose();
+  });
+});
+
+describe('过程材料具名入口', () => {
+  const tool = 'cognition_tree_process';
+  const processId = 'a'.repeat(64);
+  const save = { treeId: 'T1', action: { kind: 'save', text: '未入树的原料' } };
+  const read = { treeId: 'T1', action: { kind: 'read', processId } };
+
+  it('只传宿主绑定的工作区；点读对同工作区另一会话开放，且不分派正式树操作', async () => {
+    const f = fixture();
+    try {
+      await expect(f.invoke(tool, save)).resolves.toEqual({ treeId: 'T1', processId });
+      f.session('next', 'D:\\alias\\alpha');
+      await expect(f.invoke(tool, read, f.exec('next'))).resolves.toEqual({ treeId: 'T1', processId, text: '旧过程材料' });
+      expect(f.backend.process).toHaveBeenNthCalledWith(1, ROOT_A, save);
+      expect(f.backend.process).toHaveBeenNthCalledWith(2, ROOT_A, read);
+      expect(f.calls).toEqual([]);
+      expect((await f.post('process', read)).status).toBe(400);
+    } finally { await f.dispose(); }
+  });
+
+  it('拒绝重放与自报身份；宿主只读时仍可点读，保存不会启动后台', async () => {
+    const f = fixture();
+    try {
+      f.services.set('sandboxPolicy', { resolve: () => ({ mode: 'read-only', workspaceRoot: ROOT_A }) });
+      for (const input of [save, { ...read, sessionId: 'b' }, { ...read, action: { ...read.action, publish: true } },
+        { ...read, action: { kind: 'publish', processId } }, { ...read, action: { kind: 'read', processId: '../outside' } }]) {
+        await expect(f.invoke(tool, input)).rejects.toMatchObject({ code: 'invalid' });
+      }
+      expect(f.factory).not.toHaveBeenCalled();
+      await expect(f.invoke(tool, read)).resolves.toMatchObject({ processId });
+      expect(f.backend.process).toHaveBeenCalledOnce();
+    } finally { await f.dispose(); }
   });
 });
 
@@ -847,7 +885,7 @@ describe('AI 读取预算默认值与工具说明', () => {
     return missing;
   }
 
-  it('六个工具的参数、嵌套字段与二选一分支都有中文说明，readView 合同写明单位与续读规则', async () => {
+  it('工具的参数、嵌套字段与二选一分支都有中文说明，readView 合同写明单位与续读规则', async () => {
     const f = fixture();
     for (const tool of f.tools.values()) {
       expect(tool.description).toContain('当前工作区');

@@ -98,10 +98,26 @@ export class MemoryTreeStore implements TreeStore {
     mode: 'existing' | 'createNew',
     work: (transaction: WriteTransaction) => T | Promise<T>,
   ): Promise<T> {
+    return this.enqueue(treeId, mode, work);
+  }
+
+  /** 使用同一写队列，只在已加载的现有树版本匹配时执行 work。 */
+  async transactAtStamp<T>(
+    treeId: TreeId, expectedStamp: number, work: (transaction: WriteTransaction) => T | Promise<T>,
+  ): Promise<T> {
+    if (!Number.isSafeInteger(expectedStamp) || expectedStamp < 1) {
+      throw new CognitionError('invalid', 'expectedStamp 必须是正安全整数。');
+    }
+    return this.enqueue(treeId, 'existing', work, expectedStamp);
+  }
+
+  private enqueue<T>(
+    treeId: TreeId, mode: TransactMode, work: (transaction: WriteTransaction) => T | Promise<T>, expectedStamp?: number,
+  ): Promise<T> {
     const previous = this.writeChains.get(treeId) ?? Promise.resolve();
     const current = previous.then(
-      () => this.execute(treeId, mode, work),
-      () => this.execute(treeId, mode, work),
+      () => this.execute(treeId, mode, work, expectedStamp),
+      () => this.execute(treeId, mode, work, expectedStamp),
     );
     const settled = current.then(
       () => undefined,
@@ -119,12 +135,14 @@ export class MemoryTreeStore implements TreeStore {
    * @param treeId 目标树
    * @param mode 事务模式
    * @param work 调用方的写命令
+   * @param expectedStamp 可选的已有树版本条件
    * @returns work 的返回值
    */
   private async execute<T>(
     treeId: TreeId,
     mode: TransactMode,
     work: (transaction: WriteTransaction) => T | Promise<T>,
+    expectedStamp?: number,
   ): Promise<T> {
     if (mode !== 'existing' && mode !== 'createNew') {
       throw new CognitionError('invalid', `不认识的存储模式 ${String(mode)}`);
@@ -135,6 +153,9 @@ export class MemoryTreeStore implements TreeStore {
     }
     if (mode === 'createNew' && existing !== undefined) {
       throw new CognitionError('invalid', `树 ${treeId} 已存在，不能重复创建`);
+    }
+    if (expectedStamp !== undefined && existing?.stamp !== expectedStamp) {
+      throw new CognitionError('invalid', '树在读取后已有变更；请重新读取当前树并重新判断后再提交。');
     }
 
     const base = existing ?? createTreeRecord();

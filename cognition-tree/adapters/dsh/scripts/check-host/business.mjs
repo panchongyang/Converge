@@ -121,7 +121,29 @@ export async function runBusiness(host) {
     return { sameWorkspace: rows.length, otherWorkspace: 0 };
   });
 
-  await check('business.tools-read', '六个 AI 工具支持建树、维护与查询', async () => {
+  await check('business.process', '过程材料可按 ID 续读，不进入正式读面或变更树版本', async () => {
+    const text = '还没形成判断的过程材料（隔离）';
+    const input = { treeId, action: { kind: 'save', text } };
+    const saved = await aiCall(host, 'process', input);
+    assert(saved.treeId === treeId && /^[0-9a-f]{64}$/.test(saved.processId) && !('text' in saved), '保存须返回定位符而不是回显正文');
+    const retry = await aiCall(host, 'process', input);
+    assert(retry.processId === saved.processId, '重复保存同一材料的 ID 不一致');
+    const processTool = host.tools.get('cognition_tree_process');
+    const read = { treeId, action: { kind: 'read', processId: saved.processId } };
+    const readIn = session => processTool.execute(read, { agent: { id: session.id, session }, signal: new AbortController().signal });
+    const seen = await readIn(fixture.peerSession);
+    assert(seen.processId === saved.processId && seen.text === text, '同工作区新会话读不到原过程材料');
+    const other = await readIn(fixture.otherSession).then(() => 'leaked', error => error.code);
+    assert(other === 'missing', '过程材料泄露到另一工作区');
+    const view = await aiCall(host, 'read_view', readViewInput(treeId));
+    const history = await aiCall(host, 'read_history', { treeId, limit: 20 });
+    const pending = await aiCall(host, 'read_unconfirmed', { treeId, by: ['human', 'ai'], limit: 20 });
+    assert(view.stamp === 1 && view.nodes.length === 1 && history.items.length === 1 && pending.items.length === 1,
+      '过程材料影响了正式读面');
+    return { idLength: saved.processId.length, stamp: view.stamp };
+  });
+
+  await check('business.tools-read', '树工具支持建树、维护与查询', async () => {
     const start = performance.now();
     const view = await aiCall(host, 'read_view', readViewInput(treeId));
     assert(view.rootId === treeId && view.focusId === treeId && view.stamp === 1, '初版根或版本不符');

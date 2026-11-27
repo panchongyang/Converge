@@ -61,7 +61,7 @@ function samePath(left: string, right: string): boolean {
  * @param right 后一次状态
  * @returns 设备和文件序号相同且没有额外硬链接时为 true
  */
-function sameFile(left: BigIntStats, right: BigIntStats): boolean {
+export function sameFile(left: BigIntStats, right: BigIntStats): boolean {
   return left.dev === right.dev && left.ino === right.ino && left.nlink === 1n && right.nlink === 1n;
 }
 
@@ -70,7 +70,7 @@ function sameFile(left: BigIntStats, right: BigIntStats): boolean {
  * @param path 预期的绝对目录路径
  * @returns 存在合法目录时为 true；缺失时为 false
  */
-function checkedDirectory(path: string): boolean {
+export function checkedDirectory(path: string): boolean {
   const info = lstatSync(path, { bigint: true, throwIfNoEntry: false });
   if (info === undefined) return false;
   if (!info.isDirectory() || !samePath(path, realpathSync.native(path))) {
@@ -85,7 +85,7 @@ function checkedDirectory(path: string): boolean {
  * @param ignoreUnsafe 仅枚举主库时跳过不安全的目录项；显式开库和检查辅助文件仍拒绝
  * @returns 文件身份；不存在或明确跳过时为 undefined
  */
-function checkedFile(path: string, ignoreUnsafe = false): BigIntStats | undefined {
+export function checkedFile(path: string, ignoreUnsafe = false): BigIntStats | undefined {
   const info = lstatSync(path, { bigint: true, throwIfNoEntry: false });
   if (info === undefined) return undefined;
   if (!info.isFile() || info.nlink !== 1n || !samePath(path, realpathSync.native(path))) {
@@ -156,7 +156,7 @@ function checkSidecar(path: string, suffix: string, info: BigIntStats): void {
  * 找到绑定工作区的存储目录路径；工作区根缺失与尚未建库存储目录是不同结果。
  * @param root 已校验的宿主工作区根
  */
-function storageDirectory(root: string): string {
+export function storageDirectory(root: string): string {
   if (!checkedDirectory(root)) throw new CognitionError('storage', '宿主工作区根目录不存在');
   return join(root, '.converge');
 }

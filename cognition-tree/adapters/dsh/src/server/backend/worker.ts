@@ -8,6 +8,7 @@ import { createKernel, type Kernel } from '@cognition-tree/kernel/catalog';
 import { CognitionError } from '@cognition-tree/kernel/types';
 import { aiReadViewCost } from '../ai-view-wire';
 import { SqliteTreeStore } from '../storage';
+import { readProcess, saveProcess } from '../storage/process';
 import type { Request, Reply } from './protocol';
 
 /** 每个工作区一套内核与读会话；游标的进程代际和字节预算均由查询层核算。 */
@@ -48,6 +49,20 @@ async function handle(message: Request): Promise<void> {
     return;
   }
   try {
+    if (message.kind === 'process') {
+      const { root, input: { treeId, action } } = message;
+      if (action.kind === 'save') {
+        const { store } = await workspace(root);
+        // 留档归属一棵现存的树，但不对它开写事务。
+        const tree = await store.openRead(treeId);
+        await tree.close();
+      }
+      const value = action.kind === 'save'
+        ? saveProcess(root, treeId, action.text)
+        : readProcess(root, treeId, action.processId);
+      send({ kind: 'ok', id: message.id, value });
+      return;
+    }
     const entry = await workspace(message.root);
     const value = message.kind === 'listTrees'
       ? await entry.store.listTrees()

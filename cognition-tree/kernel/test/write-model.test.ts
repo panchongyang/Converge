@@ -1,11 +1,12 @@
 /** §3.1 正式内存端口联测：日常决定、形成与确认绑定、历史不可变及单树提交回滚。 */
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { createKernel } from '../src/catalog';
 import { createWriteModel } from '../src/models';
 import { MemoryTreeStore } from '../src/storage/memory';
 import type { BeforeCommit } from '../src/storage/memory';
 import type {
   CognitionNode, ConfirmTarget, DailyActor, Decision, Draft, FormationRevision, NodeId, Placement, ReadSnapshot,
-  SeedTree,
+  SeedTree, TreeStore,
 } from '../src/types';
 
 const NOW = '2026-11-20T20:30:00.123+08:00';
@@ -105,6 +106,79 @@ async function state(setupResult: Setup, nodes: NodeId[] = [OLD, SIBLING, LEGACY
 }
 
 const OPEN: Draft = { body: { title: '新判断', text: '待保存正文' }, state: 'open', refs: [] };
+
+it('用当前视图版本新增与决定；同版本排队的过期写入不记形成、不通知', async () => {
+  const beforeCommit = vi.fn();
+  const sut = await setup(beforeCommit);
+  const { treeId } = sut;
+  const kernel = createKernel(sut);
+  const view = () => kernel.dispatch('ai', 'readView', {
+    treeId, focus: { root: true },
+    expand: { subtreeDepth: 'leaf', jumpHops: 0, direction: 'out', jumpFrom: 'anchor', afterJumpDepth: 0 },
+    budget: { maxScans: 100, maxNodes: 20, maxBytes: 8000 }, onLimit: 'exact',
+  });
+  const add = { treeId, placement: { parentId: ROOT, kind: 'branch' } as const, draft: OPEN };
+  const decide = { treeId, nodeId: OLD, decision: PRUNE };
+  const before = await state(sut);
+  const { stamp: expectedStamp } = await view();
+  const stale = { code: 'invalid', message: /重新读取.*重新判断/ };
+  const [id] = await Promise.all([
+    kernel.dispatch('ai', 'addBranch', { ...add, expectedStamp }),
+    expect(kernel.dispatch('ai', 'decideNode', { ...decide, expectedStamp })).rejects.toMatchObject(stale),
+  ]);
+  const afterAdd = await state(sut, [OLD, id]);
+  expect(afterAdd.stamp).toBe(expectedStamp + 1);
+  expect(afterAdd.nodes[0]).toEqual(before.nodes[0]);
+  expect(afterAdd.nodes[1]).toMatchObject({ id, body: OPEN.body, confirmation: 'unconfirmed' });
+  expect(afterAdd.history).toHaveLength(before.history.length + 1);
+  await expect(kernel.dispatch('ai', 'addBranch', { ...add, expectedStamp })).rejects.toMatchObject(stale);
+  expect(await state(sut, [OLD, id])).toEqual(afterAdd);
+  expect(beforeCommit).toHaveBeenCalledTimes(2); // 自举与成功新增。
+  expect(sut.clockCalls()).toBe(1);
+
+  const current = await view();
+  await expect(kernel.dispatch('ai', 'decideNode', { ...decide, expectedStamp: current.stamp })).resolves.toBe(OLD);
+  const afterDecide = await state(sut, [OLD, id]);
+  expect(afterDecide.stamp).toBe(current.stamp + 1);
+  expect(afterDecide.nodes[0]).toMatchObject({ state: 'prune', confirmation: 'unconfirmed' });
+  expect(afterDecide.history).toHaveLength(afterAdd.history.length + 1);
+  expect(beforeCommit).toHaveBeenCalledTimes(3);
+});
+
+it('明确提供的 expectedStamp 必须是正安全整数；校验不打开写事务', async () => {
+  const sut = await setup();
+  const { model, store, treeId } = sut;
+  const kernel = createKernel(sut);
+  const plain = vi.spyOn(store, 'transact');
+  const guarded = vi.spyOn(store, 'transactAtStamp');
+  const placement = { parentId: ROOT, kind: 'branch' } as const;
+  const error = { code: 'invalid', message: /expectedStamp.*正安全整数/ };
+  for (const bad of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, '1', null, true, {}, []]) {
+    await expect(model.addBranch('ai', treeId, placement, OPEN, bad as number)).rejects.toMatchObject(error);
+    await expect(kernel.dispatch('ai', 'decideNode', { treeId, nodeId: OLD, decision: PRUNE, expectedStamp: bad as number }))
+      .rejects.toMatchObject(error);
+  }
+  await expect(kernel.dispatch('ai', 'addBranch', { treeId, placement, draft: OPEN, expectedStamp: undefined }))
+    .rejects.toMatchObject(error);
+  expect(plain).not.toHaveBeenCalled();
+  expect(guarded).not.toHaveBeenCalled();
+  expect(sut.clockCalls()).toBe(0);
+});
+
+it('存储未实现版本护栏时拒绝有条件的写入，省略条件仍走旧端口', async () => {
+  const sut = await setup();
+  const { store, clock, treeId } = sut;
+  const legacy: TreeStore = { openRead: store.openRead.bind(store), transact: store.transact.bind(store) };
+  const transact = vi.spyOn(legacy, 'transact');
+  const kernel = createKernel({ store: legacy, clock });
+  const add = { treeId, placement: { parentId: ROOT, kind: 'branch' } as const, draft: OPEN };
+  const { stamp } = await state(sut);
+  await expect(kernel.dispatch('ai', 'addBranch', { ...add, expectedStamp: stamp }))
+    .rejects.toMatchObject({ code: 'invalid', message: /不支持.*expectedStamp/ });
+  expect(transact).not.toHaveBeenCalled();
+  await expect(kernel.dispatch('ai', 'addBranch', add)).resolves.toEqual(expect.any(String));
+  expect(transact).toHaveBeenCalledTimes(1);
+});
 
 it.each([
   ['标题放平', { title: '误放', state: 'open', refs: [] }, '不要传 draft.title；标题必须写在 draft.body.title。'],

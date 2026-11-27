@@ -58,7 +58,7 @@ jobs:
           $packs = @(Get-ChildItem -LiteralPath $out -Filter '*.tgz' -File)
           if ($packs.Count -ne 1) { throw 'Expected exactly one candidate archive.' }
           $pack = $packs[0]
-          $expected = @('package/package.json', 'package/LICENSE', 'package/README.md', 'package/cordis.patch.yml', 'package/lib/index.js', 'package/lib/worker.js', 'package/lib/client.js')
+          $expected = @('package/package.json', 'package/LICENSE', 'package/README.md', 'package/cordis.patch.yml', 'package/lib/index.js', 'package/lib/worker.js', 'package/lib/client.js', 'package/skills/incremental-formalization/SKILL.md')
           $entries = @(tar.exe -tf $pack.FullName)
           if (Compare-Object -ReferenceObject $expected -DifferenceObject $entries) {
             throw 'Unexpected files in candidate archive.'

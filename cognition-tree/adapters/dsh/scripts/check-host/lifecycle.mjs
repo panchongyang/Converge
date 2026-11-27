@@ -44,8 +44,8 @@ export async function runRegister(host) {
   let fatal = null;
     // ---------- 注册：真实 Cordis 插件激活 ----------
     fiber = ctx.plugin(candidate);
-    const registered = await check('plugin.register', 'Cordis 激活后注册六个 AI 工具', async () => {
-      await waitFor(() => AI_TOOLS.every(name => tools.get(name)), 5000, '六个认知树工具注册');
+    const registered = await check('plugin.register', 'Cordis 激活后注册七个 AI 工具', async () => {
+      await waitFor(() => AI_TOOLS.every(name => tools.get(name)), 5000, '七个认知树工具注册');
       const definitions = AI_TOOLS.map(name => {
         const definition = tools.get(name);
         assert(definition, `${name} 未注册`);
@@ -228,7 +228,7 @@ export async function runReload(host) {
         const reloaded = await import(`${pathToFileURL(host.pluginEntry).href}?reload=${Date.now()}`);
         const nextPlugin = reloaded.default?.apply ? reloaded.default : reloaded;
         fiber = ctx.plugin(nextPlugin);
-        await waitFor(() => AI_TOOLS.every(name => tools.get(name)), 5000, '重载后六个工具注册');
+        await waitFor(() => AI_TOOLS.every(name => tools.get(name)), 5000, '重载后七个工具注册');
         await waitFor(async () => {
           const response = await dispatch(CALL_PATH, {
             method: 'POST',

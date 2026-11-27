@@ -6,8 +6,8 @@ import type { AiOp, UiCall, UiOp } from '../../types/wire';
 /** DSH 的显式入口白名单，不随内核新增操作自动扩大；手稿 bootstrapTree 不在其中。 */
 const FIELDS: Record<UiOp, { required: string[]; optional?: string[] }> = {
   createTree: { required: ['treeId', 'rootQuestion'] },
-  addBranch: { required: ['treeId', 'placement', 'draft'] },
-  decideNode: { required: ['treeId', 'nodeId', 'decision'] },
+  addBranch: { required: ['treeId', 'placement', 'draft'], optional: ['expectedStamp'] },
+  decideNode: { required: ['treeId', 'nodeId', 'decision'], optional: ['expectedStamp'] },
   confirm: { required: ['treeId', 'target'] },
   // includeDetails 仅作为 readView 的可选布尔透传；详细模式的投影、计费与续读由内核守。
   readView: { required: ['treeId', 'focus', 'expand', 'budget', 'onLimit'], optional: ['cursor', 'includeDetails'] },

@@ -23,7 +23,7 @@ const LINK_PREFIX = '-';
  * 供 `read_view` 工具定义使用的页内语法说明。
  * 面向模型：只解释怎样读当前页、怎样把短写拼成真实 nodeId；不描述宿主或内核实现。
  */
-export const AI_READ_VIEW_GUIDE = `includeDetails 省略或 false 时，读取结果是 CTV2 紧凑文本（超 128 节点或 256 引用时退回 JSON）；includeDetails=true 时整页直接返回完整 JSON：同一 TreeView，每个节点（含为连通父链补入的 link）多一个 detail（NodeDetail：正文、状态、确认、来历与当前形成记录全文）。每页自包含。续读用原查询和本页的 cursor；版本 t 只供核对，不传给工具。
+export const AI_READ_VIEW_GUIDE = `includeDetails 省略或 false 时，读取结果是 CTV2 紧凑文本（超 128 节点或 256 引用时退回 JSON）；includeDetails=true 时整页直接返回完整 JSON：同一 TreeView，每个节点（含为连通父链补入的 link）多一个 detail（NodeDetail：正文、状态、确认、来历与当前形成记录全文）。每页自包含。续读用原查询和本页的 cursor；版本 t 不作为读取参数；基于当前页新增或决定时可用作 expectedStamp。
 首行：CTV2 n=… r=… t=… c=0|1 p=N root=… focus=… [cursor="…"]。n/r 是节点/引用数，c=1 已覆盖请求范围，c=0 且有 cursor 表示预算先到。N 是毫秒前缀长度。
 ID 前缀：# 行给出 13 位毫秒的前 N 位，切换后续节点的前缀。不同的前缀按首次出现编号 1、2、3…；同值 # 再出现不重新编号。节点行 ID 只写后 13-N 位（沿用最近 # 行）：
   <后缀> = node-rev-<当前前缀+后缀>-0000000000000001

@@ -77,7 +77,9 @@ async function embedded() {
   const listTrees = vi.fn(async (root: string): Promise<WorkspaceTreeDirectory> => ({
     trees: [{ treeId: 'T1', rootId: 'legacy-root', rootQuestion: root === 'D:\\isolated\\workspace' ? '当前工作区的根问题' : '另一工作区的根问题' }], unavailable: [],
   }));
-  const factory = vi.fn(() => ({ call: calls as Backend['call'], listTrees, close, watch: () => () => {} } satisfies Backend));
+  const factory = vi.fn(() => ({ call: calls as Backend['call'], listTrees, close, watch: () => () => {},
+    process: async (_root, { treeId }) => ({ treeId, processId: 'a'.repeat(64), text: '隔离过程材料' }),
+  } satisfies Backend));
   const session = root.sessions.create('isolated-session', { meta: { cwd: 'D:\\isolated\\workspace' } });
   const otherSession = root.sessions.create('other-session', { meta: { cwd: 'D:\\isolated\\other-workspace' } });
   const plugin = root.plugin({ name: 'isolated-cognition-tree-test', inject, apply(ctx: TestContext) { installHost(ctx as unknown as HostContext, factory); } });
@@ -124,15 +126,15 @@ async function embedded() {
 }
 
 describe.skipIf(!hasSdk)('已安装真实 DSH SDK 的无监听器嵌入契约', () => {
-  it('真实ToolsService仅接受六个具名AI工具与canonical output，SessionStore绑定能执行且懒加载', async () => {
+  it('真实ToolsService仅接受七个具名AI工具与canonical output，SessionStore绑定能执行且懒加载', async () => {
     const f = await embedded();
     try {
       expect(f.factory).not.toHaveBeenCalled();
       expect(f.root.tools.definitions().map(tool => tool.name)).toEqual([
         'cognition_tree_create_tree', 'cognition_tree_add_branch', 'cognition_tree_decide_node',
-        'cognition_tree_read_view', 'cognition_tree_read_history', 'cognition_tree_read_unconfirmed',
+        'cognition_tree_read_view', 'cognition_tree_read_history', 'cognition_tree_read_unconfirmed', 'cognition_tree_process',
       ]);
-      expect(f.root.tools.schemas()).toHaveLength(6);
+      expect(f.root.tools.schemas()).toHaveLength(7);
       for (const tool of f.root.tools.definitions()) {
         f.assertSupportedJsonSchema(tool.parameters);
         f.assertSupportedJsonSchema(tool.output.schema);
@@ -260,7 +262,7 @@ describe.skipIf(!hasSdk)('已安装真实 DSH SDK 的无监听器嵌入契约', 
       expect(await other.json()).toEqual({ ok: true, value: { trees: [{ treeId: 'T1', rootId: 'legacy-root', rootQuestion: '另一工作区的根问题' }], unavailable: [] } });
       expect(f.listTrees).toHaveBeenLastCalledWith('D:\\isolated\\other-workspace');
       expect(f.calls).not.toHaveBeenCalled();
-      expect(f.root.tools.definitions()).toHaveLength(6);
+      expect(f.root.tools.definitions()).toHaveLength(7);
       expect(f.root.tools.get('cognition_tree_list_trees')).toBeUndefined();
     } finally { await f.dispose(); }
   });
@@ -298,7 +300,7 @@ describe.skipIf(!hasSdk)('已安装真实 DSH SDK 的无监听器嵌入契约', 
       expect(f.close).toHaveBeenCalledTimes(1);
       const again = f.root.plugin({ name: 'isolated-cognition-tree-again', inject, apply(ctx: TestContext) { installHost(ctx as unknown as HostContext, f.factory); } });
       await again.await();
-      await vi.waitFor(() => expect(f.root.tools.definitions()).toHaveLength(6));
+      await vi.waitFor(() => expect(f.root.tools.definitions()).toHaveLength(7));
       expect((await f.dispatch(f.treesRequest())).status).toBe(200);
       expect(f.factory).toHaveBeenCalledTimes(2);
       await again.dispose();

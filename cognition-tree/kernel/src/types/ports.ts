@@ -93,6 +93,19 @@ export interface TreeStore {
     mode: 'existing' | 'createNew',
     work: (transaction: WriteTransaction) => T | Promise<T>,
   ): Promise<T>;
+
+  /**
+   * 可选的已有树写入护栏；在同一事务加载树后、执行 work 前比对版本，不匹配则拒绝（invalid）。
+   * 未实现此端口时，不能把带护栏的请求降级为普通写入。
+   * @param treeId 目标树
+   * @param expectedStamp 当前树读取到的正安全整数版本
+   * @param work 仅在版本匹配时执行的已有树事务
+   */
+  transactAtStamp?<T>(
+    treeId: TreeId,
+    expectedStamp: number,
+    work: (transaction: WriteTransaction) => T | Promise<T>,
+  ): Promise<T>;
 }
 
 /**
