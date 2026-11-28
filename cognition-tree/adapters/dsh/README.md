@@ -33,7 +33,7 @@ pnpm --dir adapters/dsh run build            # 生成仓库根的 .local-work/ds
 node adapters/dsh/scripts/check-package.mjs # 检查打包后的入口以及宿主加载器协议
 ```
 
-可选的真实 SDK 隔离检查需要显式提供已有 DSH 安装根（包含 `node_modules/`），如 `node adapters/dsh/scripts/check-host.mjs --sdk-root "<DSH 安装根>"`；单测中的 SDK 专项使用 `DSH_SDK_TEST_ROOT`，未设置时明确跳过，不代替核心测试。
+可选的真实 SDK 隔离检查需要显式提供已有 DSH 安装根（包含 `node_modules/`）。从 `cognition-tree/` 运行 `node adapters/dsh/scripts/check-host.mjs --sdk-root "<DSH 安装根>"` 检查宿主回归，运行 `node adapters/dsh/scripts/check-autonomy.mjs "<DSH 安装根>"` 验证随包技能、同工作区会话隔离及同会话多树写入。单测中的 SDK 专项使用 `DSH_SDK_TEST_ROOT`，未设置时明确跳过，不代替核心测试。
 
 从仓库根 `.local-work/dsh-plugin/` 可以查看完整待安装包：服务端入口、数据库工作线程、客户端模块、manifest 和 Cordis patch。`scripts/` 的检查不需要正在使用的 DSH 登录令牌，不访问它的 3080 服务，也不把认知数据写到真实工作区。
 
@@ -57,7 +57,22 @@ AI 工具的新增、剪除等变更保存即生效，但未获人确认。只�
 
 ## 增量形式化
 
-在选定认知树的对话中加载工作区的 [incremental-formalization skill](<../../../.dsh/skills/incremental-formalization/SKILL.md>)。插件不监听会话、不在后台代写。AI 可用 `cognition_tree_process` 在已有树下另存一段不成形的文本（最大 16 KiB UTF-8），或按 `treeId` + `processId` 点读。材料保存在 `.converge/process/`，独立于 SQLite；正常树查询、历史、通知里都不出现，不需要迁移树库。没有列表、回放或改旧材料的入口。知道 ID 的同工作区会话可读，把 ID 留在需要续接的上下文中；材料不是私密会话存储。
+对话中的自主选树与维护默认关闭。要启用，在对应 DSH profile 的 Cordis 配置中设置 `cognition-tree` 插件项的 `config.autonomousWorkspaces`：
+
+```yaml
+- id: cognition-tree
+  config:
+    autonomousWorkspaces:
+      - 'D:\path\to\registered-workspace'
+```
+
+默认是空列表。每项填写 DSH 已注册工作区根目录的绝对路径，按解析后的注册根精确匹配。会话在子目录中启动，只有当 DSH 将该会话解析为同一个已启用的注册根时才启用；这项配置不会为任意子目录或独立注册的子工作区递归授权。该功能需要宿主提供 skills 能力，配置生效后可在新会话中使用。
+
+启用的会话可看到随包的 [cognition-tree-autonomy skill](<skills/cognition-tree-autonomy/SKILL.md>)。AI 在普通对话回合按需用 `cognition_tree_list_trees({limit?, after?})` 分页找候选，取得目录中的 `treeId` 和 `rootQuestion`。成功用 `cognition_tree_read_view` 读到已有树，或成功用 `cognition_tree_create_tree` 建树后，会话可加载 [incremental-formalization skill](<skills/incremental-formalization/SKILL.md>)。两个 skill 由插件按会话提供，不需要全局或工作区 `.dsh/skills/` 副本。
+
+一个会话可以先维护 `project-decisions`，再维护 `release-decisions`；每次读、写或处理过程材料都显式传入对应的 `treeId`。无按树分配的 skill 槽位，也不按标题或面板猜树。插件不监听对话、不在后台代写；启用或加载 skill 不授予写权限，只读会话不建树、不留档、不写树。
+
+AI 可用 `cognition_tree_process` 在已有树下另存一段不成形的文本（最大 16 KiB UTF-8），或按 `treeId` + `processId` 点读。材料保存在 `.converge/process/`，独立于 SQLite；正常树查询、历史、通知里都不出现，不需要迁移树库。没有列表、回放或改旧材料的入口。知道 ID 的同工作区会话可读，把 ID 留在需要续接的上下文中；材料不是私密会话存储。
 
 续接时参考这段材料、重读当前树，再按当前判断另写 `add_branch` 或 `decide_node`。新写入可带刚读到的 `expectedStamp`；变更发生后旧版本被拒绝，须重新读取和判断。没有变基或自动补交，既有工具不传该字段时行为不变。
 

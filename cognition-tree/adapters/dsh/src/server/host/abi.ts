@@ -8,9 +8,33 @@ export interface SessionIdentity {
   readonly header: { readonly cwd?: string };
 }
 
+/** DSH 注册表接收的随包技能；省略 invocation 即允许模型与人的原生调用面。 */
+export interface BundledSkill {
+  readonly source: 'bundled';
+  readonly provider: 'dsh-cognition-tree';
+  readonly path: string;
+  readonly name: string;
+  readonly description: string;
+  readonly whenToUse: string;
+  readonly content: string;
+}
+
+export type Dispose = () => void | Promise<void>;
+export interface AgentSkills { register(skill: BundledSkill): Dispose }
+
+/** 只使用宿主发出的精确 agent 对象和 agent-local Context，不从会话 ID 反推作用域。 */
+export interface HostAgent {
+  readonly id: string;
+  readonly session: SessionIdentity;
+  readonly ctx?: {
+    get(name: 'skills'): AgentSkills | undefined;
+    get(name: 'tools'): { register(tool: HostTool): Dispose } | undefined;
+  };
+}
+
 /** 只取宿主执行器已经绑定的 agent/session，不接受工具参数自报身份。 */
 export interface ToolExecution {
-  readonly agent?: { readonly id: string; readonly session: SessionIdentity };
+  readonly agent?: HostAgent;
   readonly signal: AbortSignal;
 }
 
@@ -62,6 +86,10 @@ export interface HostContext {
   };
   readonly connection?: { readonly fetch: { register(route: FetchRoute): () => Promise<void> } };
   readonly logger?: { warn(message: string): void };
+  on?: {
+    (name: 'agent/created', listener: (event: { agent: HostAgent; signal?: AbortSignal }) => Promise<void>): Dispose;
+    (name: 'agent/disposed', listener: (event: { agent: HostAgent }) => void): Dispose;
+  };
   inject(deps: string[], callback: (ctx: HostContext) => void): unknown;
   effect(execute: () => () => void | Promise<void>, label?: string): unknown;
 }

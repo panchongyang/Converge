@@ -4,7 +4,7 @@
  * description 只给模型读参数含义与单位，不代替内核校验，也不为参数新增业务缺省。
  */
 import { CognitionError, type TreeView } from '@cognition-tree/kernel/types';
-import type { HostContext, HostTool, JsonSchema } from './abi';
+import type { HostContext, HostTool, JsonSchema, ToolExecution } from './abi';
 import { AI_TOOLS, type AiOp } from '../../types/wire';
 import { AI_READ_VIEW_GUIDE } from '../ai-read-view';
 import { renderAiReadView } from '../ai-view-wire';
@@ -12,6 +12,14 @@ import { AI_READ_VIEW_BUDGET, exactObject, parseAiInput, record } from './input'
 import type { ProcessInput } from '../backend/protocol';
 import { boundaryError, type HostRuntime } from './runtime';
 import { assertAiWriteAllowed } from './file-policy';
+import { databaseName } from '../storage/files';
+import { idKey } from '../storage/order-keys';
+
+/** 宿主可选的自主维护边界；不改变认知树日常工具的权限。 */
+export interface AutonomyToolHooks {
+  assertEnabled(exec: ToolExecution, root: string): void | Promise<void>;
+  verifiedTree(exec: ToolExecution, root: string): void;
+}
 
 /** 构造严格具名对象；required 没有隐式缺省。@param properties 允许字段。@param required 必传字段。@param description 字段含义。 */
 function object(properties: Record<string, JsonSchema>, required = Object.keys(properties), description?: string): JsonSchema & { type: 'object' } {
@@ -196,6 +204,46 @@ function hasNodeDetail(value: Record<string, unknown>): boolean {
 }
 
 export const PROCESS_TOOL = 'cognition_tree_process';
+export const LIST_TREES_TOOL = 'cognition_tree_list_trees';
+const DEFAULT_LIST_LIMIT = 25;
+const MAX_LIST_LIMIT = 100;
+
+/** 构造可注册到宿主作用域的只读目录工具；每次执行仍核对 live 会话和工作区开关。 */
+export function createListTreesTool(runtime: HostRuntime, autonomy: Pick<AutonomyToolHooks, 'assertEnabled'>): HostTool {
+  return {
+    name: LIST_TREES_TOOL,
+    description: '分页列出当前工作区可读的活动认知树及其根问题，不读取树正文。仅已启用自主维护的工作区可用；不切换任何当前树。',
+    parameters: object({
+      limit: integerField(`每页最多返回的树数：1–${MAX_LIST_LIMIT}；省略时为 ${DEFAULT_LIST_LIMIT}。`),
+      after: stringField('上一页返回的 nextAfter（末项 treeId）；首页省略。'),
+    }, []),
+    output: { schema: {}, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+    async execute(args, exec) {
+      try {
+        exactObject(args, [], ['limit', 'after']);
+        const limit = Object.hasOwn(args, 'limit') ? args.limit : DEFAULT_LIST_LIMIT;
+        if (typeof limit !== 'number' || !Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIST_LIMIT) {
+          throw new CognitionError('invalid', `limit 必须是 1–${MAX_LIST_LIMIT} 的整数。`);
+        }
+        let afterKey: Buffer | undefined;
+        if (Object.hasOwn(args, 'after')) {
+          if (typeof args.after !== 'string') throw new CognitionError('invalid', 'after 必须是上一页返回的 nextAfter。');
+          databaseName(args.after); // 只验证树 ID 的格式，不访问文件。
+          afterKey = idKey(args.after);
+        }
+        const root = await runtime.aiWorkspace(exec);
+        await autonomy.assertEnabled(exec, root);
+        const { trees } = await runtime.listTrees(root, exec.signal);
+        // 使用目录自身的排序键；即使末项在翻页间被归档，也能从该位置续读。
+        const start = afterKey === undefined ? 0 : trees.findIndex(item => Buffer.compare(idKey(item.treeId), afterKey) > 0);
+        if (start < 0) return { trees: [] };
+        const end = start + limit;
+        const page = trees.slice(start, end);
+        return end < trees.length ? { trees: page, nextAfter: trees[end - 1].treeId } : { trees: page };
+      } catch (error) { throw boundaryError(error); }
+    },
+  };
+}
 
 function processInput(args: unknown): ProcessInput {
   exactObject(args, ['treeId', 'action']);
@@ -250,9 +298,10 @@ function processTool(ctx: HostContext, runtime: HostRuntime): HostTool {
  * 注册完整的一组工具；中途碰撞会回滚自己已注册的工具，不移除其它插件的同名项。
  * @param ctx 宿主工具注册表。
  * @param runtime 本插件惰性后台及生命周期。
+ * @param autonomy 可选的可信树验证通知；目录工具由宿主注册到具体会话，不在此处公开。
  * @returns 只解绑本插件贡献的函数。
  */
-export function registerTools(ctx: HostContext, runtime: HostRuntime): () => void {
+export function registerTools(ctx: HostContext, runtime: HostRuntime, autonomy?: Pick<AutonomyToolHooks, 'verifiedTree'>): () => void {
   const disposers: (() => void)[] = [];
   try {
     for (const op of Object.keys(AI_TOOLS) as AiOp[]) {
@@ -281,7 +330,12 @@ export function registerTools(ctx: HostContext, runtime: HostRuntime): () => voi
             if (op === 'createTree' || op === 'addBranch' || op === 'decideNode') {
               await assertAiWriteAllowed(ctx, exec.agent!.session, root, exec.signal);
             }
-            return await runtime.call('ai', op, input, root, exec.signal);
+            const result = await runtime.call('ai', op, input, root, exec.signal);
+            if (autonomy && (op === 'readView' || op === 'createTree')) {
+              // 验证通知不属于读写结果；即使观察者异常，也不改变已成功的结果。
+              try { void Promise.resolve(autonomy.verifiedTree(exec, root)).catch(() => {}); } catch { /* best effort */ }
+            }
+            return result;
           } catch (error) { throw boundaryError(error); }
         },
       };
