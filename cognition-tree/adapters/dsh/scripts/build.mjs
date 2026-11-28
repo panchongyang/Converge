@@ -60,8 +60,10 @@ await writeFile(join(target, 'package.json'), JSON.stringify({ name, version, de
 // 包页使用可以独立阅读的安装说明，不复制源码仓的相对导航。
 await copyFile(join(root, 'npm-README.md'), join(target, 'README.md'));
 await copyFile(join(root, 'cordis.patch.yml'), join(target, 'cordis.patch.yml'));
-const skillDir = 'skills/incremental-formalization';
-await mkdir(join(target, skillDir), { recursive: true });
-await copyFile(resolve(root, '../../../.dsh', skillDir, 'SKILL.md'), join(target, skillDir, 'SKILL.md'));
+for (const name of ['cognition-tree-autonomy', 'incremental-formalization']) {
+  const skillDir = join('skills', name);
+  await mkdir(join(target, skillDir), { recursive: true });
+  await copyFile(join(root, skillDir, 'SKILL.md'), join(target, skillDir, 'SKILL.md'));
+}
 await copyFile(new URL('../../../../LICENSE', import.meta.url), join(target, 'LICENSE'));
 console.log(`已构建 ${part}：${target}；未安装至 DSH。`);

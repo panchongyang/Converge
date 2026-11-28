@@ -18,10 +18,15 @@ assert.equal(packagedReadme, await readFile(new URL('../npm-README.md', import.m
 assert.ok(packagedReadme.includes(`dsh plugin --profile web add ${manifest.name}`));
 const packagedLicense = await readFile(new URL('LICENSE', stage), 'utf8');
 assert.equal(packagedLicense, await readFile(new URL('../../../../LICENSE', import.meta.url), 'utf8'));
-const skillFile = 'skills/incremental-formalization/SKILL.md';
-const skillText = await readFile(new URL(skillFile, stage), 'utf8');
-assert.equal(skillText, await readFile(new URL(`../../../../.dsh/${skillFile}`, import.meta.url), 'utf8'));
-assert.match(skillText, /^---\r?\nname: incremental-formalization\r?\n/);
+for (const name of ['cognition-tree-autonomy', 'incremental-formalization']) {
+  const skillFile = `skills/${name}/SKILL.md`;
+  const packagedSkill = await readFile(new URL(skillFile, stage));
+  const canonicalSkill = await readFile(new URL(`../${skillFile}`, import.meta.url));
+  assert.ok(packagedSkill.equals(canonicalSkill), `随包 skill 与源码不一致：${name}`);
+  assert.match(packagedSkill.toString('utf8'), new RegExp(
+    `^---\\r?\\nname: ${name}\\r?\\ndescription: [^\\r\\n]+\\r?\\nwhenToUse: [^\\r\\n]+\\r?\\n---\\r?\\n`,
+  ));
+}
 const patch = await readFile(new URL(manifest.dsh.bundle.patch, stage), 'utf8');
 assert.ok(patch.includes(`name: ${manifest.name}`));
 const host = await import(new URL(manifest.exports['.'], stage));

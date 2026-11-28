@@ -7,7 +7,8 @@
 ## 路径
 
 ```text
-当前对话 + 当前树 → skill 判断是否值得记录
+当前对话 → 判断是否值得长期维护 → 目录查找、核对目标或谨慎建树
+  针对每棵明确的目标树，skill 判断本轮变化怎么记录
   ├─ 可以独立说明的判断（包括可说明的未决）→ 现有树写入工具
   ├─ 还不能安全入树、但值得保留 → 另存文本，返回过程 ID
   └─ 没有值得记录的变化 → 不写
@@ -28,6 +29,8 @@
 
 ## 实现与验收
 
-DSH 工具校验可信会话和文件权限，现有 worker 做档案 I/O；内核与存储负责树版本和正式写入。位于项目 `.dsh/skills/incremental-formalization/` 的 skill 描述触发时机、写法和续接。npm 包附带 skill 文本，需要启用的工作区自行添加；启动插件不监听或拦截对话。
+DSH 工具校验可信会话和文件权限，现有 worker 做档案 I/O；内核与存储负责树版本和正式写入。支持 skills 的宿主在会话所属的已注册工作区根精确匹配插件的 `autonomousWorkspaces` 时，提供随包的 [cognition-tree-autonomy skill](<../../adapters/dsh/skills/cognition-tree-autonomy/SKILL.md>)；列表默认空，子目录中的会话须解析到相同已启用注册根。会话用正常 `cognition_tree_read_view` 成功读到已有树或用 `cognition_tree_create_tree` 成功建树后，可加载随包的 [incremental-formalization skill](<../../adapters/dsh/skills/incremental-formalization/SKILL.md>)。配置例子见[插件说明](<../../adapters/dsh/README.md#增量形式化>)；无需全局或工作区的文件系统 skill 副本。
+
+目录工具 `cognition_tree_list_trees({limit?, after?})` 提供有界分页，目录行包括 `treeId` 和 `rootQuestion`。读树核对后，才按需要维护；只在没有合适候选、根问题值得长期维护且已获写入授权时考虑新建。同一会话可以通过明确的 `treeId` 维护多棵树，每项读写和过程操作都带对应的 ID，不按标题猜树、不依赖单树槽位。加载 skill 不扩权；只读可以查询，但不能创建树、写树或保存过程。插件不监听或拦截对话，不跑后台任务。
 
 工程验收覆盖同工作区跨会话点读、跨工作区及跨树隔离、只读拒存、树读面隔离、材料重复保存、损坏与文件路径边界、版本过期拒写。写侧使用效果需另行实测：用同一多轮讨论观察漏记、重复、误剪/误勘误和催写/纠正次数，检查读者仅靠树能否恢复现行结论与改判理由；自动化通过不等于该体验假设已验证。
